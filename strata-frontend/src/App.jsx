@@ -1,11 +1,7 @@
-// src/App.jsx
 import { useEffect } from 'react';
 import { supabase } from './lib/supabaseClient';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import ResetPassword from './pages/ResetPassword';
-import Dashboard from './pages/Dashboard';
+import { BrowserRouter } from 'react-router-dom';
+import AppRouter from './routes/AppRouter';
 
 export default function App() {
   useEffect(() => {
@@ -23,12 +19,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-      </Routes>
+      <AppRouter />
     </BrowserRouter>
   );
 }
