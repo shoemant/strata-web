@@ -71,7 +71,7 @@ export default function DocumentsPage() {
       data: { publicUrl },
     } = supabase.storage.from('documents').getPublicUrl(filePath);
 
-    console.log('Submitting metadata to backend:', {
+    console.log('Submitting metadata:', {
       title,
       category,
       url: publicUrl,
@@ -79,34 +79,42 @@ export default function DocumentsPage() {
       building_id: buildingId,
     });
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/documents`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title,
-        category,
-        url: publicUrl,
-        uploaded_by: session.user.id,
-        building_id: buildingId,
-      }),
-    });
+    const { data, error } = await supabase
+      .from('documents')
+      .insert([
+        {
+          title,
+          category,
+          url: publicUrl,
+          uploaded_by: session.user.id,
+          building_id: buildingId,
+        },
+      ])
+      .select(); // ensure inserted rows are returned
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error('Upload error:', result);
+    if (error) {
+      console.error('Insert error:', error);
       setLoading(false);
       return;
     }
 
-    setDocuments((prev) => [result[0], ...prev]);
+    if (!data || !data[0]) {
+      console.error('No data returned from insert!');
+      setLoading(false);
+      return;
+    }
 
+    setDocuments((prev) => [data[0], ...prev]);
+
+
+    // Reset form
     setTitle('');
     setCategory('');
     setFile(null);
     document.getElementById('fileInput').value = '';
     setLoading(false);
   };
+
 
   return (
     <div className="p-6">
