@@ -79,15 +79,18 @@ export default function DocumentsPage() {
       building_id: buildingId,
     });
 
-    const { data, error } = await supabase.from('documents').insert([
-      {
-        title,
-        category,
-        url: publicUrl,
-        uploaded_by: session.user.id,
-        building_id: buildingId,
-      },
-    ]);
+    const { data, error } = await supabase
+      .from('documents')
+      .insert([
+        {
+          title,
+          category,
+          url: publicUrl,
+          uploaded_by: session.user.id,
+          building_id: buildingId,
+        },
+      ])
+      .select(); // ensure inserted rows are returned
 
     if (error) {
       console.error('Insert error:', error);
@@ -95,7 +98,14 @@ export default function DocumentsPage() {
       return;
     }
 
+    if (!data || !data[0]) {
+      console.error('No data returned from insert!');
+      setLoading(false);
+      return;
+    }
+
     setDocuments((prev) => [data[0], ...prev]);
+
 
     // Reset form
     setTitle('');
