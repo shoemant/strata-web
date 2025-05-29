@@ -21,7 +21,7 @@
  */
 
 const express = require('express');
-const { supabase } = require('../utils/supabaseClient'); // Adjust path as needed
+const { supabase } = require('../utils/supabaseClient');
 const router = express.Router();
 
 /**
