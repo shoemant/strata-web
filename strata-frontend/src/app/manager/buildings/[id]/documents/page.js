@@ -71,7 +71,7 @@ export default function DocumentsPage() {
       data: { publicUrl },
     } = supabase.storage.from('documents').getPublicUrl(filePath);
 
-    console.log('Submitting metadata to backend:', {
+    console.log('Submitting metadata:', {
       title,
       category,
       url: publicUrl,
@@ -90,28 +90,21 @@ export default function DocumentsPage() {
     ]);
 
     if (error) {
-      console.error('Direct insert error:', error);
-    } else {
-      setDocuments((prev) => [data[0], ...prev]);
-    }
-
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error('Upload error:', result);
+      console.error('Insert error:', error);
       setLoading(false);
       return;
     }
 
-    setDocuments((prev) => [result[0], ...prev]);
+    setDocuments((prev) => [data[0], ...prev]);
 
+    // Reset form
     setTitle('');
     setCategory('');
     setFile(null);
     document.getElementById('fileInput').value = '';
     setLoading(false);
   };
+
 
   return (
     <div className="p-6">
