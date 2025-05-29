@@ -30,11 +30,11 @@ app.get('/api/health', (req, res) => {
 app.options('*', cors()); // Handle preflight requests
 
 // Route groups
-app.use('/api', authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/invite', inviteRoutes);
 app.use('/api/documents', documents);
 app.use('/api/resource-types', resourceTypeRoutes);
-app.use('/api/resources/', resources);
+app.use('/api/resources', resources); // ✅ no trailing slash
 
 // Start server
 const PORT = process.env.PORT || 3001;
