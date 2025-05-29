@@ -21,20 +21,16 @@ app.use(
 
 app.use(express.json());
 
-// Routes
+// Add health check first
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date() });
+});
+
+// Route groups
 app.use('/api', authRoutes);
 app.use('/api/invite', inviteRoutes);
 app.use('/api/documents', documents);
 app.use('/api/resource-types', resourceTypeRoutes);
-
-// Add this block before listen()
-app.get('/', (req, res) => {
-  res.send('Strata backend is running 🚀');
-});
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date() });
-});
 
 // Start server
 const PORT = process.env.PORT || 3001;
