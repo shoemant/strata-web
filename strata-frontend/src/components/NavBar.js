@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/utils/supabase/client';
 import LogoutButton from './LogoutButton';
 
@@ -9,6 +10,8 @@ export default function NavBar() {
   const [role, setRole] = useState(null);
   const [buildings, setBuildings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState(undefined); // undefined initially
+  const router = useRouter();
 
   useEffect(() => {
     const fetchProfileAndBuildings = async (user) => {
@@ -31,7 +34,6 @@ export default function NavBar() {
         setLoading(false);
         return;
       }
-
 
       if (profile.role === 'manager') {
         const { data: buildingData } = await supabase
@@ -60,33 +62,36 @@ export default function NavBar() {
       setLoading(false);
     };
 
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      fetchProfileAndBuildings(user);
-    });
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+      await fetchProfileAndBuildings(session?.user ?? null);
+    };
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        fetchProfileAndBuildings(session?.user ?? null);
+    init();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      fetchProfileAndBuildings(session?.user ?? null);
+
+      if (!session) {
+        router.push('/login');
       }
-    );
+    });
 
     return () => {
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
-  if (loading) {
+  if (loading || session === undefined) {
     return (
       <nav className="bg-gray-800 text-white px-6 py-4 flex justify-between items-center"></nav>
     );
   }
 
-  if (!role && !loading) {
-    return (
-      <nav className="bg-gray-800 text-white px-6 py-4 flex justify-between items-center">
-        <p className="text-sm text-gray-400">You are logged out.</p>
-      </nav>
-    );
+  if (!session || !role) {
+    return null; // 👈 hide entire navbar on logout
   }
 
   return (
