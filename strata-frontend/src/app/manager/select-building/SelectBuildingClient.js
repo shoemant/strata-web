@@ -1,8 +1,9 @@
+// src/app/manager/select-building/SelectBuildingClient.js
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/utils/supabase/client';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { supabase } from '@/utils/supabase/client';
 import { useUser } from '@supabase/auth-helpers-react';
 
 export default function SelectBuildingClient() {
@@ -11,7 +12,6 @@ export default function SelectBuildingClient() {
     const router = useRouter();
 
     const [buildings, setBuildings] = useState([]);
-
     const nextPage = searchParams.get('next') || 'dashboard';
 
     useEffect(() => {
