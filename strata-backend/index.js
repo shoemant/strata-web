@@ -26,6 +26,8 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date() });
 });
 
+app.options('*', cors()); // Handle preflight requests
+
 // Route groups
 app.use('/api', authRoutes);
 app.use('/api/invite', inviteRoutes);
