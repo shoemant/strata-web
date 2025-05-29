@@ -5,26 +5,39 @@ const dotenv = require('dotenv');
 const authRoutes = require('./routes/auth.js');
 const inviteRoutes = require('./routes/invite.js');
 const documents = require('./routes/documents.js');
-const resourceTypeRoutes = require('./routes/resourceTypes');
+const resourceTypeRoutes = require('./routes/resourceTypes.js');
 
 dotenv.config();
 
 const app = express();
 
+// Use dynamic origin for CORS in production
 app.use(
   cors({
-    origin: 'http://localhost:3000',
+    origin: process.env.CLIENT_URL || 'http://localhost:3000',
     credentials: true,
   })
 );
 
 app.use(express.json());
 
+// Routes
 app.use('/api', authRoutes);
 app.use('/api/invite', inviteRoutes);
 app.use('/api/documents', documents);
 app.use('/api/resource-types', resourceTypeRoutes);
 
-app.listen(3001, () => {
-  console.log('Backend running at http://localhost:3001');
+// Add this block before listen()
+app.get('/', (req, res) => {
+  res.send('Strata backend is running 🚀');
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date() });
+});
+
+// Start server
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Backend running at http://localhost:${PORT}`);
 });
