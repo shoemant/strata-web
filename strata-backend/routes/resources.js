@@ -18,10 +18,9 @@
  * - Ensure RLS (Row-Level Security) is enforced for each table appropriately
  */
 
-import express from 'express';
-import { supabase } from '../lib/supabaseClient.js';
+const express = require('express');
+const { supabase } = require('../lib/supabaseClient');
 
-const router = express.Router();
 
 /**
  * POST /
@@ -122,4 +121,5 @@ router.get('/building/:building_id', async (req, res) => {
   res.json(data);
 });
 
-export default router;
+module.exports = router;
+
