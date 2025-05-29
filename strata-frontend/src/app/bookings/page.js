@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import { useSupabaseClient, useSession } from '@supabase/auth-helpers-react';
 import BookingList from '../../components/BookingList';
-import BookingForm from '../../components/BookingForm';
 
 export default function BookingsPage() {
   const supabase = useSupabaseClient();
