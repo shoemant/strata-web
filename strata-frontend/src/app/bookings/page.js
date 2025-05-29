@@ -26,7 +26,6 @@ export default function BookingsPage() {
 
   return (
     <div className="space-y-6">
-      <BookingForm onSuccess={fetch} />
       <BookingList bookings={bookings} />
     </div>
   );
