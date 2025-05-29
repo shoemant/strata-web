@@ -58,15 +58,13 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const { title, category, url, uploaded_by, building_id } = req.body;
 
-  console.log('Insert payload:', { title, category, url, uploaded_by, building_id });
-
   const { data, error } = await supabase
     .from('documents')
     .insert([{ title, category, url, uploaded_by, building_id }])
-    .select('*');
+    .select('*'); // Forces return of the inserted row
 
   if (error) {
-    console.error('Supabase INSERT Error:', error);
+    console.error('Insert Error:', error);
     return res.status(400).json({ error: error.message });
   }
 

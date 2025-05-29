@@ -21,7 +21,7 @@
  */
 
 const express = require('express');
-const { supabase } = require('../utils/supabaseClient');
+const { supabase } = require('../utils/supabaseClient'); // Adjust path as needed
 const router = express.Router();
 
 /**
@@ -94,7 +94,7 @@ router.post('/reset-password', async (req, res) => {
   const { email } = req.body;
 
   const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.FRONTEND_URL}/update-password`
+    redirectTo: 'http://localhost:3000/update-password', // Update this URL in production
   });
 
   if (error) {

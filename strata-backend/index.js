@@ -21,12 +21,6 @@ app.use(
 
 app.use(express.json());
 
-// Add health check first
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date() });
-});
-
-app.options('*', cors()); // Handle preflight requests
 
 // Route groups
 app.use('/api', authRoutes);
