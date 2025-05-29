@@ -46,10 +46,7 @@ export default function AcceptInvitePage() {
     if (signupError) return setError(signupError.message);
 
     const userId = authData?.user?.id;
-
-    if (!userId) {
-      return setError('User ID is missing after sign up.');
-    }
+    if (!userId) return setError('User ID is missing after sign up.');
 
     const { error: profileError } = await supabase.from('user_profiles').upsert(
       {
@@ -58,9 +55,7 @@ export default function AcceptInvitePage() {
         role: invite.role,
         building_id: invite.building_id,
       },
-      {
-        onConflict: 'id',
-      }
+      { onConflict: 'id' }
     );
 
     if (profileError) return setError(profileError.message);
