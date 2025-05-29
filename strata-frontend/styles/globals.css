@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.gsi-material-button {
+  background-color: #fff;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  box-shadow: rgba(60, 64, 67, 0.08) 0 1px 2px 0;
+  color: #3c4043;
+  cursor: pointer;
+  font-family: Roboto, sans-serif;
+  font-size: 14px;
+  height: 40px;
+  width: 100%;
+  padding: 0;
+  text-align: center;
+  transition: box-shadow 0.3s;
+}
+
+.gsi-material-button:hover {
+  box-shadow:
+    rgba(60, 64, 67, 0.3) 0 1px 2px 0,
+    rgba(60, 64, 67, 0.15) 0 2px 6px 2px;
+}
+
+.gsi-material-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #4285f4;
+}
+
+.gsi-material-button-state {
+  display: none;
+}
+
+.gsi-material-button-content-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.gsi-material-button-icon {
+  margin-right: 10px;
+}
+
+.gsi-material-button-icon svg {
+  height: 18px;
+  width: 18px;
+}
+
+.gsi-material-button-contents {
+  font-weight: 500;
+}
