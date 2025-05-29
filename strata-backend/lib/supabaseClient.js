@@ -1,24 +1,31 @@
 /**
  * supabaseClient.js
- * 
- * This file initializes the Supabase client instance, allowing the rest of the application 
+ *
+ * This file initializes the Supabase client instance, allowing the rest of the application
  * to securely interact with the Supabase backend (e.g., authentication, database operations).
- * 
- * - Uses environment variables for the Supabase URL and public anonymous key.
- * - Loads environment variables using `dotenv` to keep credentials out of source code.
- * - The `supabase` instance can be imported and used throughout the project.
- * 
+ *
+ * - Uses environment variables to keep credentials secure and out of source code.
+ * - The exported `supabase` instance can be imported and reused across the project.
+ *
  * Environment Variables Required:
- * - SUPABASE_URL:       Supabase project URL 
- * - SUPABASE_ANON_KEY:  Supabase project's public anonymous key
+ * - SUPABASE_URL:             The URL of your Supabase project (e.g., https://xyzcompany.supabase.co)
+ * - SUPABASE_SERVICE_ROLE_KEY: The service role key with elevated privileges. This should be used on the backend only.
+ *
+ * Important:
+ * Do not expose the SERVICE_ROLE_KEY to the client. This file must only be used in server-side/backend code.
  */
 
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+const dotenv = require('dotenv');
+const { createClient } = require('@supabase/supabase-js');
 
+// Load environment variables from .env file
 dotenv.config();
 
-export const supabase = createClient(
+// Initialize Supabase client with service role key (backend only)
+const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+// Export the client for use in backend modules
+module.exports = { supabase };

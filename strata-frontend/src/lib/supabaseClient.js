@@ -1,23 +1,39 @@
-/**
- * supabaseClient.js (Frontend)
- * 
- * Initializes a Supabase client instance for use within the frontend React app.
- * 
- * This allows the client to:
- * - Sign in and register users using Supabase Auth
- * - Read/write to the Supabase database (with Row Level Security enabled)
- * - Subscribe to real-time changes (optional)
- * 
- * Environment variables (defined in your `.env` file):
- * - VITE_SUPABASE_URL:      The URL of your Supabase project
- * - VITE_SUPABASE_ANON_KEY: The public anonymous key for your Supabase instance
- * 
- * These must begin with `VITE_` to be exposed to the frontend by Vite.
- */
+'use client';
+import { useEffect, useState } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
 
-import { createClient } from '@supabase/supabase-js';
+export default function Navbar() {
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+  const [session, setSession] = useState(null);
 
-export const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_, { session }) => {
+      setSession(session);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  return (
+    <nav className="p-4 bg-white shadow">
+      {session ? (
+        <button onClick={() => supabase.auth.signOut()}>Sign Out</button>
+      ) : (
+        <button
+          onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })}
+        >
+          Sign In
+        </button>
+      )}
+    </nav>
+  );
+}
