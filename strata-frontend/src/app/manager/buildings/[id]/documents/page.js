@@ -79,17 +79,22 @@ export default function DocumentsPage() {
       building_id: buildingId,
     });
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/documents`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const { data, error } = await supabase.from('documents').insert([
+      {
         title,
         category,
         url: publicUrl,
         uploaded_by: session.user.id,
         building_id: buildingId,
-      }),
-    });
+      },
+    ]);
+
+    if (error) {
+      console.error('Direct insert error:', error);
+    } else {
+      setDocuments((prev) => [data[0], ...prev]);
+    }
+
 
     const result = await response.json();
 
