@@ -13,6 +13,8 @@ export default function NavBar() {
   useEffect(() => {
     const fetchProfileAndBuildings = async (user) => {
       if (!user) {
+        setRole(null);
+        setBuildings([]);
         setLoading(false);
         return;
       }
@@ -24,9 +26,12 @@ export default function NavBar() {
         .single();
 
       if (!profile) {
+        setRole(null);
+        setBuildings([]);
         setLoading(false);
         return;
       }
+
 
       if (profile.role === 'manager') {
         const { data: buildingData } = await supabase
@@ -76,8 +81,12 @@ export default function NavBar() {
     );
   }
 
-  if (!role) {
-    return null;
+  if (!role && !loading) {
+    return (
+      <nav className="bg-gray-800 text-white px-6 py-4 flex justify-between items-center">
+        <p className="text-sm text-gray-400">You are logged out.</p>
+      </nav>
+    );
   }
 
   return (
