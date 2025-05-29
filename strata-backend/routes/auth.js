@@ -94,7 +94,7 @@ router.post('/reset-password', async (req, res) => {
   const { email } = req.body;
 
   const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: 'http://localhost:3000/update-password', // Update this URL in production
+    redirectTo: `${process.env.FRONTEND_URL}/update-password`
   });
 
   if (error) {
