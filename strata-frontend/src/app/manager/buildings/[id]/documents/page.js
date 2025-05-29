@@ -6,6 +6,7 @@ import { useSupabaseClient, useSession } from '@supabase/auth-helpers-react';
 
 export default function DocumentsPage() {
   const { id: buildingId } = useParams();
+  console.log('Building ID:', buildingId); // Add this line
   const supabase = useSupabaseClient();
   const session = useSession();
   const [building, setBuilding] = useState([]);
