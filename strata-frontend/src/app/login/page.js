@@ -3,85 +3,70 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/utils/supabase/client';
-import GoogleMaterialButton from '@/components/GoogleMaterialButton';
 
-export default function LoginPage() {
-  const router = useRouter();
+export default function LoginEmailPage() {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const router = useRouter();
 
-  const handleEmailLogin = async (e) => {
+  const handleContinue = async (e) => {
     e.preventDefault();
     setError('');
+    console.log("Submitting email:", email);
 
-    const { data: loginData, error: loginError } =
-      await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+    const emailTrimmed = email.trim().toLowerCase();
 
-    if (loginError) {
-      console.error('Login error:', loginError.message);
-      return setError(loginError.message);
-    }
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    const user = session?.user;
-
-    if (!user) {
-      return setError('Unable to retrieve user data.');
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError || !profile?.role) {
-      router.push('/complete-profile');
-    } else {
-      router.push('/');
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${location.origin}/auth/callback`,
-      },
+    // 1. Check if user exists
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/check-user`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: emailTrimmed }),
     });
-    if (error) setError(error.message);
+
+    const { exists, role, error: backendError } = await res.json();
+    if (backendError) return setError(backendError);
+
+    console.log("check-user response:", { exists, role, backendError });
+
+    if (exists) {
+      console.log("✅ User exists. Redirecting to password page...");
+      await router.push(`/login/password?email=${encodeURIComponent(emailTrimmed)}`);
+      return;
+    }
+
+    if (role?.trim().toLowerCase() === 'manager') {
+      console.log("Invited as manager, redirecting to signup/manager...");
+      return router.push(`/signup/manager?email=${encodeURIComponent(emailTrimmed)}`);
+    }
+
+    // 2. Check for tenant/owner invite
+    const { data: invite } = await supabase
+      .from('invitations')
+      .select('role')
+      .eq('email', emailTrimmed)
+      .eq('status', 'pending')
+      .maybeSingle();
+
+    if (invite?.role === 'tenant') {
+      return router.push(`/signup/tenant?email=${encodeURIComponent(emailTrimmed)}`);
+    }
+
+    if (invite?.role === 'owner') {
+      return router.push(`/signup/owner?email=${encodeURIComponent(emailTrimmed)}`);
+    }
+
+    // 4. Fallback: general registration
+    router.push(`/signup?email=${encodeURIComponent(emailTrimmed)}`);
   };
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md bg-white p-8 rounded-xl shadow">
-        <h2 className="text-2xl font-bold text-center mb-6">Welcome Back</h2>
+        <h2 className="text-2xl font-bold text-center mb-6">Enter your email</h2>
+        {error && <div className="bg-red-100 text-red-700 px-4 py-2 mb-4 rounded">{error}</div>}
 
-        {error && (
-          <div className="bg-red-100 text-red-700 px-4 py-2 mb-4 rounded">
-            {error}
-          </div>
-        )}
-
-        <div className="mb-6">
-          <GoogleMaterialButton onClick={handleGoogleLogin} />
-        </div>
-
-        <div className="relative text-center mb-6">
-          <hr className="border-gray-300" />
-          <span className="absolute bg-white px-2 text-gray-500 -top-3 left-1/2 -translate-x-1/2 text-sm">
-            or continue with email
-          </span>
-        </div>
-
-        <form onSubmit={handleEmailLogin} className="space-y-4">
+        <form onSubmit={handleContinue} className="space-y-4">
           <input
             type="email"
             placeholder="Email"
@@ -90,31 +75,13 @@ export default function LoginPage() {
             className="w-full p-2 border border-gray-300 rounded"
             required
           />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded"
-            required
-          />
           <button
             type="submit"
             className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
           >
-            Sign In
+            Continue
           </button>
         </form>
-
-        <p className="mt-4 text-center text-sm text-gray-600">
-          <a href="/signup" className="text-blue-600 hover:underline">
-            Sign up
-          </a>{' '}
-          |{' '}
-          <a href="/forgot-password" className="text-blue-600 hover:underline">
-            Forgot password?
-          </a>
-        </p>
       </div>
     </div>
   );

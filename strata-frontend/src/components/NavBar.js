@@ -70,14 +70,19 @@ export default function NavBar() {
 
     init();
 
+    const publicPaths = ['/login', '/signup', '/forgot-password', '/auth/callback'];
+
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       fetchProfileAndBuildings(session?.user ?? null);
 
-      if (!session) {
+      const isPublic = publicPaths.includes(window.location.pathname);
+
+      if (!session && !isPublic) {
         router.push('/login');
       }
     });
+
 
     return () => {
       listener.subscription.unsubscribe();
@@ -91,7 +96,7 @@ export default function NavBar() {
   }
 
   if (!session || !role) {
-    return null; // 👈 hide entire navbar on logout
+    return null;
   }
 
   return (
@@ -129,6 +134,14 @@ export default function NavBar() {
           </>
         )}
 
+        {role === 'admin' && (
+          <>
+            <Link href="/admin/add-building">
+              <span className="hover:underline">Add Building</span>
+            </Link>
+          </>
+        )}
+
         {role === 'owner' && (
           <>
             <Link href="/owner/profile">
@@ -136,6 +149,9 @@ export default function NavBar() {
             </Link>
             <Link href="/owner/dashboard">
               <span className="hover:underline">Dashboard</span>
+            </Link>
+            <Link href="/owner/invite-tenant">
+              <span className="hover:underline">Invite Tenants</span>
             </Link>
             <Link href="/owner/documents">
               <span className="hover:underline">Documents</span>
@@ -151,6 +167,7 @@ export default function NavBar() {
             </Link>
           </>
         )}
+
       </div>
       <LogoutButton />
     </nav>
