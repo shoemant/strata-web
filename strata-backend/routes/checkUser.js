@@ -11,51 +11,43 @@ router.post('/', async (req, res) => {
     const { email } = req.body;
 
     if (!email) {
-        return res.status(400).json({ exists: false, error: 'Email is required' });
+        return res.status(400).json({
+            exists: false,
+            role: null,
+            invite: null,
+            error: 'Email is required',
+        });
     }
 
     const emailLower = email.toLowerCase();
 
-    // 1. Check if user exists in auth.users
-    const { data: userList, error: userError } = await supabase.auth.admin.listUsers({ email: emailLower });
+    try {
+        const { data, error } = await supabase.rpc('check_user_status', {
+            email_input: emailLower,
+        });
 
-    if (userError) {
-        return res.status(500).json({ exists: false, error: userError.message });
+        if (error) {
+            return res.status(500).json({
+                exists: false,
+                role: null,
+                invite: null,
+                error: error.message || 'Database error',
+            });
+        }
+
+        return res.json({
+            exists: data.exists,
+            role: data.exists ? 'existing' : null,
+            invite: data.invite,
+        });
+    } catch (err) {
+        return res.status(500).json({
+            exists: false,
+            role: null,
+            invite: null,
+            error: err.message || 'Server error',
+        });
     }
-
-    const existsInAuth = userList?.users?.length > 0;
-
-    // 2. Check for manager invite
-    const { data: managerMatch, error: managerError } = await supabase
-        .from('manager_buildings')
-        .select('id')
-        .eq('email', emailLower)
-        .is('user_id', null);
-
-    if (managerError) {
-        return res.status(500).json({ exists: false, error: managerError.message });
-    }
-
-    // 3. Check for tenant/owner invite
-    const { data: inviteMatch, error: inviteError } = await supabase
-        .from('invitations')
-        .select('role')
-        .eq('email', emailLower)
-        .eq('status', 'pending');
-
-    if (inviteError) {
-        return res.status(500).json({ exists: false, error: inviteError.message });
-    }
-
-    if (existsInAuth) {
-        return res.json({ exists: true, role: 'existing' });
-    } else if (managerMatch?.length > 0) {
-        return res.json({ exists: false, role: 'manager' });
-    } else if (inviteMatch?.length > 0) {
-        return res.json({ exists: false, role: inviteMatch[0].role }); // tenant or owner
-    }
-
-    return res.json({ exists: false, role: 'none' });
 });
 
 module.exports = router;

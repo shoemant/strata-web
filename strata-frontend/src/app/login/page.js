@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/utils/supabase/client';
 
 export default function LoginEmailPage() {
   const [email, setEmail] = useState('');
@@ -12,53 +11,47 @@ export default function LoginEmailPage() {
   const handleContinue = async (e) => {
     e.preventDefault();
     setError('');
-    console.log("Submitting email:", email);
 
     const emailTrimmed = email.trim().toLowerCase();
+    console.log('Submitting email:', emailTrimmed);
 
-    // 1. Check if user exists
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/check-user`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: emailTrimmed }),
-    });
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/check-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailTrimmed }),
+      });
 
-    const { exists, role, error: backendError } = await res.json();
-    if (backendError) return setError(backendError);
+      const { exists, invite, error: backendError } = await res.json();
+      console.log('check-user response:', { exists, invite, backendError });
 
-    console.log("check-user response:", { exists, role, backendError });
+      if (backendError) {
+        setError(backendError);
+        return;
+      }
 
-    if (exists) {
-      console.log("✅ User exists. Redirecting to password page...");
-      await router.push(`/login/password?email=${encodeURIComponent(emailTrimmed)}`);
-      return;
+      if (exists) {
+        return router.push(`/login/password?email=${encodeURIComponent(emailTrimmed)}`);
+      }
+
+      if (invite === 'manager') {
+        return router.push(`/signup/manager?email=${encodeURIComponent(emailTrimmed)}`);
+      }
+
+      if (invite === 'tenant') {
+        return router.push(`/signup/tenant?email=${encodeURIComponent(emailTrimmed)}`);
+      }
+
+      if (invite === 'owner') {
+        return router.push(`/signup/owner?email=${encodeURIComponent(emailTrimmed)}`);
+      }
+
+      return router.push(`/signup?email=${encodeURIComponent(emailTrimmed)}`);
+    } catch (err) {
+      console.error('Error during email check:', err);
+      setError('Something went wrong. Please try again later.');
     }
-
-    if (role?.trim().toLowerCase() === 'manager') {
-      console.log("Invited as manager, redirecting to signup/manager...");
-      return router.push(`/signup/manager?email=${encodeURIComponent(emailTrimmed)}`);
-    }
-
-    // 2. Check for tenant/owner invite
-    const { data: invite } = await supabase
-      .from('invitations')
-      .select('role')
-      .eq('email', emailTrimmed)
-      .eq('status', 'pending')
-      .maybeSingle();
-
-    if (invite?.role === 'tenant') {
-      return router.push(`/signup/tenant?email=${encodeURIComponent(emailTrimmed)}`);
-    }
-
-    if (invite?.role === 'owner') {
-      return router.push(`/signup/owner?email=${encodeURIComponent(emailTrimmed)}`);
-    }
-
-    // 4. Fallback: general registration
-    router.push(`/signup?email=${encodeURIComponent(emailTrimmed)}`);
   };
-
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">

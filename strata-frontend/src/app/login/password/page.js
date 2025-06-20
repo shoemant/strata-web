@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/utils/supabase/client';
 
@@ -31,14 +31,12 @@ export default function PasswordLogin() {
             return;
         }
 
-        // 1. Check if user profile already exists
         const { data: profile } = await supabase
             .from('user_profiles')
             .select('id')
             .eq('id', user.id)
             .maybeSingle();
 
-        // 2. If not, check if they're a manager by invite
         if (!profile) {
             const { data: managerRow } = await supabase
                 .from('manager_buildings')
@@ -58,16 +56,15 @@ export default function PasswordLogin() {
             }
         }
 
-        // 3. Otherwise just continue to home
         router.push('/');
     };
-
 
     return (
         <div className="min-h-screen flex items-center justify-center">
             <form onSubmit={handleLogin} className="bg-white p-8 rounded shadow w-full max-w-md">
                 <h2 className="text-xl font-semibold mb-4">Enter Password for {email}</h2>
                 {error && <div className="text-red-600 mb-2">{error}</div>}
+
                 <input
                     type="password"
                     placeholder="Password"
@@ -75,7 +72,25 @@ export default function PasswordLogin() {
                     onChange={(e) => setPassword(e.target.value)}
                     className="border w-full p-2 mb-4"
                 />
-                <button className="bg-blue-600 text-white py-2 w-full rounded">Log In</button>
+
+                <button className="bg-blue-600 text-white py-2 w-full rounded mb-4">Log In</button>
+
+                <div className="flex justify-between text-sm text-blue-600">
+                    <button
+                        type="button"
+                        onClick={() => router.back()}
+                        className="hover:underline"
+                    >
+                        ← Back
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => router.push(`/forgot-password?email=${encodeURIComponent(email || '')}`)}
+                        className="hover:underline"
+                    >
+                        Forgot Password?
+                    </button>
+                </div>
             </form>
         </div>
     );

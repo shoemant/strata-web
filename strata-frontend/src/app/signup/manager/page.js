@@ -20,12 +20,34 @@ export default function ManagerSignupPage() {
             const user = userData?.user;
 
             if (user) {
-                // Upsert profile if not yet stored
+                // 1. Upsert user profile
                 await supabase.from('user_profiles').upsert({
                     id: user.id,
                     email: user.email,
                     role: 'manager',
                 });
+
+                // 2. Update manager_buildings with user_id
+                await supabase
+                    .from('manager_buildings')
+                    .update({ user_id: user.id })
+                    .eq('email', user.email)
+                    .is('user_id', null); // only update if not already linked
+
+                // 3. Fetch building_id and update user profile
+                const { data: managerRow } = await supabase
+                    .from('manager_buildings')
+                    .select('building_id')
+                    .eq('user_id', user.id)
+                    .maybeSingle();
+
+                if (managerRow?.building_id) {
+                    await supabase
+                        .from('user_profiles')
+                        .update({ building_id: managerRow.building_id })
+                        .eq('id', user.id);
+                }
+
                 router.push('/manager/dashboard');
             } else {
                 setChecking(false);

@@ -32,7 +32,6 @@ export async function middleware(request) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  console.log('Middleware triggered for path:', request.nextUrl.pathname);
 
   const publicPaths = [
     '/login',
