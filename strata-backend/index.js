@@ -30,8 +30,7 @@ app.use('/api/documents', documents);
 app.use('/api/resource-types', resourceTypeRoutes);
 app.use('/api/check-user', checkUser);
 
-// Start server
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT; // <- Required by Render
 app.listen(PORT, () => {
-  console.log(`Backend running at http://localhost:${PORT}`);
+  console.log(`✅ Backend running on port ${PORT}`);
 });
