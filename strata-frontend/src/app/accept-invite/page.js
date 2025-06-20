@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/utils/supabase/client';
-
+import { Suspense } from 'react';
+export default function AcceptInviteLayout({ children }) {
+  return <Suspense fallback={<div>Loading invite page...</div>}>{children}</Suspense>;
+}
 export default function AcceptInvitePage() {
   const router = useRouter();
   const searchParams = useSearchParams();

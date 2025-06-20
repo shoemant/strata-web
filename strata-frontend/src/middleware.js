@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 
-export async function updateSession(request) {
+export async function middleware(request) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -27,15 +27,27 @@ export async function updateSession(request) {
     }
   );
 
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth')
-  ) {
+
+  const publicPaths = [
+    '/login',
+    '/login/password',
+    '/signup',
+    '/signup/tenant',
+    '/signup/owner',
+    '/signup/manager',
+    '/forgot-password',
+    '/auth/callback',
+  ];
+
+  const { pathname } = request.nextUrl;
+  const isPublic = publicPaths.includes(pathname);
+
+  if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
@@ -43,3 +55,7 @@ export async function updateSession(request) {
 
   return supabaseResponse;
 }
+
+export const config = {
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+};
