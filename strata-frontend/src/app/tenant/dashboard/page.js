@@ -1,41 +1,41 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { useSupabaseClient, useSession } from '@supabase/auth-helpers-react';
-import BookingList from '@/components/BookingList';
-import LogoutButton from '@/components/LogoutButton';
-import ProtectedRoute from '@/components/ProtectedRoute';
+
+import Link from 'next/link';
 
 export default function TenantDashboard() {
-  const supabase = useSupabaseClient();
-  const session = useSession();
-  const [bookings, setBookings] = useState([]);
+    return (
+        <div className="p-6">
+            <h1 className="text-2xl font-bold mb-4">Tenant Dashboard</h1>
 
-  useEffect(() => {
-    if (!session?.user) return;
+            <div className="space-y-4">
+                <Link
+                    href="/tenant/resources"
+                    className="block p-4 bg-white rounded shadow hover:bg-gray-50"
+                >
+                    Book Amenities
+                </Link>
 
-    const loadBookings = async () => {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('user_id', session.user.id);
+                <Link
+                    href="/tenant/documents"
+                    className="block p-4 bg-white rounded shadow hover:bg-gray-50"
+                >
+                    View Documents
+                </Link>
 
-      if (data) setBookings(data);
-    };
+                <Link
+                    href="/tenant/announcements"
+                    className="block p-4 bg-white rounded shadow hover:bg-gray-50"
+                >
+                    View Announcements
+                </Link>
 
-    loadBookings();
-  }, [session]);
-
-  if (!session) return <p>Loading your session...</p>;
-
-  return (
-    <ProtectedRoute allowedRole={['tenant']}>
-      <div className="p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Your Bookings</h2>
-          <LogoutButton />
+                <Link
+                    href="/tenant/maintenance"
+                    className="block p-4 bg-white rounded shadow hover:bg-gray-50"
+                >
+                    Submit Maintenance Request
+                </Link>
+            </div>
         </div>
-        <BookingList bookings={bookings} />
-      </div>
-    </ProtectedRoute>
-  );
+    );
 }

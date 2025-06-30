@@ -45,8 +45,19 @@ export default function NavBar() {
             <Link href="/owner/resources"><span className="hover:underline">Book Resources</span></Link>
           </>
         )}
+
+        {role === 'tenant' && (
+          <>
+            <Link href="/tenant/profile"><span className="hover:underline">Profile</span></Link>
+            <Link href="/tenant/dashboard"><span className="hover:underline">Dashboard</span></Link>
+            <Link href="/tenant/documents"><span className="hover:underline">Documents</span></Link>
+            <Link href="/tenant/announcements"><span className="hover:underline">Announcements</span></Link>
+            <Link href="/tenant/resources"><span className="hover:underline">Book Resources</span></Link>
+          </>
+        )}
+
       </div>
       <LogoutButton />
-    </nav>
+    </nav >
   );
 }
