@@ -96,7 +96,7 @@ export default function LoginFlowPage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: direction * -100 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="w-full max-w-sm p-8 space-y-6 absolute"
+            className="w-full max-w-sm p-8 space-y-6"
           >
             <form onSubmit={handleEmailSubmit} className="space-y-6">
               <h2 className="text-2xl font-bold text-text">Welcome back!</h2>
@@ -127,7 +127,7 @@ export default function LoginFlowPage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: direction * -100 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="w-full max-w-sm p-8 space-y-6 absolute"
+            className="w-full max-w-sm p-8 space-y-6"
           >
             <form onSubmit={handlePasswordSubmit} className="space-y-6">
               <h2 className="text-2xl font-bold text-text">Enter your password</h2>
@@ -162,7 +162,7 @@ export default function LoginFlowPage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: direction * -100 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="w-full max-w-sm p-8 space-y-6 absolute"
+            className="w-full max-w-sm p-8 space-y-6"
           >
             <form onSubmit={handleSignupSubmit} className="space-y-6">
               <h2 className="text-2xl font-bold text-text">Create your account</h2>
@@ -202,7 +202,7 @@ export default function LoginFlowPage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: direction * -100 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="w-full max-w-sm p-8 space-y-6 absolute"
+            className="w-full max-w-sm p-8 space-y-6"
           >
             <h2 className="text-2xl font-bold text-text">Reset Password</h2>
             {resetSent ? (
