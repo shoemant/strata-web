@@ -2,6 +2,8 @@ import '@/styles/globals.css';
 import { createServerClient } from '@supabase/ssr';
 import { cookies as getCookies } from 'next/headers';
 import ClientWrapper from './client-wrapper';
+import NavBar from '@/components/NavBar';    // ← make sure this path matches
+
 
 export const metadata = {
   title: 'Strata Management App',
@@ -61,10 +63,15 @@ export default async function RootLayout({ children }) {
 
   return (
     <html lang="en">
-
-      <body>
+      <body className="flex">
         <ClientWrapper user={user} role={role} buildings={buildings}>
-          {children}
+          {/* Sidebar + Content */}
+          <div className="flex w-full">
+            <NavBar />
+            <main className="flex-1 ml-64">
+              {children}
+            </main>
+          </div>
         </ClientWrapper>
       </body>
     </html>
