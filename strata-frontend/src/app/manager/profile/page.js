@@ -1,9 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '@/utils/supabase/client';
 import { useUser } from '@supabase/auth-helpers-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Mail, ShieldCheck, Building, User as UserIcon } from 'lucide-react';
 
 export default function ManagerProfilePage() {
   const user = useUser();
@@ -15,7 +20,7 @@ export default function ManagerProfilePage() {
     if (user) fetchProfile();
   }, [user]);
 
-  const fetchProfile = async () => {
+  async function fetchProfile() {
     const { data: profileData, error: profileError } = await supabase
       .from('user_profiles')
       .select('full_name, role')
@@ -30,111 +35,95 @@ export default function ManagerProfilePage() {
 
     const { data: buildingData, error: buildingError } = await supabase
       .from('manager_buildings')
-      .select(
-        'building_id, buildings!manager_buildings_building_id_fkey(id, name)'
-      )
+      .select('buildings!manager_buildings_building_id_fkey(id, name)')
       .eq('user_id', user.id);
 
-    if (buildingError) {
-      console.error('Failed to fetch buildings:', buildingError);
-    }
+    if (buildingError) console.error('Failed to fetch buildings:', buildingError);
 
     setProfile(profileData);
     setBuildings(buildingData?.map((b) => b.buildings) || []);
     setLoading(false);
-  };
+  }
 
   if (loading) return <p className="p-4">Loading profile...</p>;
+  if (!profile || profile.role !== 'manager') return <p className="p-4 text-red-600">Access denied. Manager role required.</p>;
 
-  if (!profile || profile.role !== 'manager') {
-    return (
-      <p className="p-4 text-red-600">Access denied. Manager role required.</p>
-    );
-  }
+  const initial = profile.full_name?.[0] || user.email?.[0] || 'U';
 
   return (
     <ProtectedRoute allowedRoles={['manager']}>
-      <div className="p-6 max-w-xl mx-auto">
-        <h1 className="text-3xl font-bold mb-4">Manager Profile</h1>
-        <div className="space-y-4">
+      <div className="absolute inset-y-0 left-16 right-0 overflow-auto bg-background p-6 space-y-12">
+        {/* Hero Banner */}
+        <div className="flex items-center space-x-4 bg-gradient-to-r from-blue-600 to-indigo-600 p-6 rounded-lg text-white">
+          <Avatar className="ring-2 ring-white">
+            {user.email ? <AvatarImage src={user.emailAvatarUrl} /> : <AvatarFallback>{initial}</AvatarFallback>}
+          </Avatar>
           <div>
-            <label className="block font-medium">Full Name</label>
-            <p className="p-2 border rounded bg-gray-50">{profile.full_name}</p>
+            <h1 className="text-3xl font-bold">Welcome, {profile.full_name}!</h1>
+            <p className="opacity-90">Here’s your profile overview at a glance.</p>
           </div>
+        </div>
 
-          <div>
-            <label className="block font-medium">Email</label>
-            <p className="p-2 border rounded bg-gray-50">
-              {user?.email || 'Unknown'}
-            </p>
-          </div>
+        {/* Profile Details Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="hover:shadow-lg transition">
+            <CardHeader>
+              <div className="flex items-center space-x-2">
+                <UserIcon className="h-5 w-5 text-blue-600" />
+                <CardTitle>Full Name</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Label>Full Name</Label>
+              <Input readOnly value={profile.full_name} />
+            </CardContent>
+          </Card>
 
-          <div>
-            <label className="block font-medium">Role</label>
-            <p className="p-2 border rounded bg-gray-50">{profile.role}</p>
-          </div>
+          <Card className="hover:shadow-lg transition">
+            <CardHeader>
+              <div className="flex items-center space-x-2">
+                <Mail className="h-5 w-5 text-green-600" />
+                <CardTitle>Email</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Label>Email Address</Label>
+              <Input readOnly value={user.email ?? 'Unknown'} />
+            </CardContent>
+          </Card>
 
-          <div>
-            <label className="block font-medium">Managed Buildings</label>
-            {buildings.length > 0 ? (
-              <ul className="list-disc ml-6 text-sm">
-                {buildings.map((b) => (
-                  <li key={b.id}>{b.name}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="p-2 border rounded bg-gray-50">None</p>
-            )}
-          </div>
+          <Card className="hover:shadow-lg transition">
+            <CardHeader>
+              <div className="flex items-center space-x-2">
+                <ShieldCheck className="h-5 w-5 text-purple-600" />
+                <CardTitle>Role</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Label>User Role</Label>
+              <Input readOnly value={profile.role} />
+            </CardContent>
+          </Card>
 
-          <div className="mt-6">
-            <h2 className="text-xl font-semibold mb-2">Quick Tools</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <a
-                href="/manager/dashboard"
-                className="block bg-blue-600 text-white text-center p-3 rounded shadow hover:bg-blue-700"
-              >
-                Dashboard
-              </a>
-              {buildings.length === 1 ? (
-                <>
-                  <a
-                    href={`/manager/buildings/${buildings[0].id}/resources`}
-                    className="block bg-green-600 text-white text-center p-3 rounded shadow hover:bg-green-700"
-                  >
-                    Manage Resources
-                  </a>
-                  <a
-                    href={`/manager/buildings/${buildings[0].id}/documents`}
-                    className="block bg-purple-600 text-white text-center p-3 rounded shadow hover:bg-purple-700"
-                  >
-                    Upload Documents
-                  </a>
-                </>
+          <Card className="hover:shadow-lg transition">
+            <CardHeader>
+              <div className="flex items-center space-x-2">
+                <Building className="h-5 w-5 text-yellow-600" />
+                <CardTitle>Managed Buildings</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {buildings.length > 0 ? (
+                <ul className="list-disc pl-5 space-y-1">
+                  {buildings.map((b) => (
+                    <li key={b.id}>{b.name}</li>
+                  ))}
+                </ul>
               ) : (
-                <>
-                  <a
-                    href="/manager/select-building?next=resources"
-                    className="block bg-green-600 text-white text-center p-3 rounded shadow hover:bg-green-700"
-                  >
-                    Manage Resources
-                  </a>
-                  <a
-                    href="/manager/select-building?next=documents"
-                    className="block bg-purple-600 text-white text-center p-3 rounded shadow hover:bg-purple-700"
-                  >
-                    Upload Documents
-                  </a>
-                </>
+                <p>No managed buildings.</p>
               )}
-              <a
-                href="/manager/invite"
-                className="block bg-yellow-500 text-white text-center p-3 rounded shadow hover:bg-yellow-600"
-              >
-                Invite Users
-              </a>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </ProtectedRoute>

@@ -1,182 +1,287 @@
+// src/app/manager/dashboard/page.jsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import Link from 'next/link';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Calendar } from '@/components/ui/calendar';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
 
 export default function ManagerDashboard() {
   const supabase = useSupabaseClient();
-  const session = useSession();
+  const session = useSession();                // <- change here
 
-  const [buildings, setBuildings] = useState([]);
-  const [pendingRequests, setPendingRequests] = useState([]);
-  const [completedRequests, setCompletedRequests] = useState([]);
+  const [building, setBuilding] = useState(null);
+  const [pending, setPending] = useState([]);
+  const [completed, setCompleted] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [resources, setResources] = useState([]);
+
+  // document preview folder+list
+  const [folders, setFolders] = useState([]);
+  const [folder, setFolder] = useState('');
+  const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [calDate, setCalDate] = useState(new Date());
+
+  // 1) fetch building + data + folder list
   useEffect(() => {
-    const fetchData = async () => {
-      if (!session?.user) return;
-      const { data: bldData, error: bldErr } = await supabase
+    if (!session) return;
+
+    async function load() {
+      // a) manager’s building
+      const { data: mb, error: mbErr } = await supabase
         .from('manager_buildings')
         .select('buildings!manager_buildings_building_id_fkey(name,id)')
-        .eq('user_id', session.user.id);
-      if (!bldErr) setBuildings(bldData.map((r) => r.buildings));
-      const ids = bldData?.map((r) => r.buildings.id) || [];
-
-      if (ids.length) {
-        const [{ data: pend = [], error: pendErr }, { data: comp = [], error: compErr }] = await Promise.all([
-          supabase.from('maintenance_requests').select('*').in('building_id', ids).eq('status', 'pending'),
-          supabase.from('maintenance_requests').select('*').in('building_id', ids).eq('status', 'completed')
-        ]);
-        if (!pendErr) setPendingRequests(pend);
-        if (!compErr) setCompletedRequests(comp);
+        .eq('user_id', session.user.id)
+        .single();
+      if (mbErr || !mb) {
+        setLoading(false);
+        return;
       }
+      const b = mb.buildings;
+      setBuilding(b);
+
+      // b) maintenance / announcements / resources
+      const [pendRes, compRes, annRes, resRes] = await Promise.all([
+        supabase.from('maintenance_requests').select('*').eq('building_id', b.id).eq('status', 'pending'),
+        supabase.from('maintenance_requests').select('*').eq('building_id', b.id).eq('status', 'completed'),
+        supabase.from('announcements').select('*').eq('building_id', b.id).order('created_at', { ascending: false }),
+        supabase.from('resources').select('*').eq('building_id', b.id).order('name'),
+      ]);
+      setPending(pendRes.data || []);
+      setCompleted(compRes.data || []);
+      setAnnouncements(annRes.data || []);
+      setResources(resRes.data || []);
+
+      // c) distinct folder list
+      const { data: folderData } = await supabase
+        .from('documents')
+        .select('folder', { distinct: true })
+        .eq('building_id', b.id)
+        .order('folder', { ascending: true });
+      setFolders(folderData.map(f => f.folder || 'root'));
+
       setLoading(false);
-    };
-    fetchData();
-  }, [session]);
+    }
+
+    load();
+  }, [session, supabase]);
+
+  // 2) fetch docs for preview whenever building or folder changes
+  useEffect(() => {
+    if (!building) return;
+    (async () => {
+      const { data } = await supabase
+        .from('documents')
+        .select('id,title,url')
+        .eq('building_id', building.id)
+        .eq('folder', folder === 'root' ? '' : folder)
+        .order('created_at', { ascending: false });
+      setDocs(data || []);
+    })();
+  }, [building, folder, supabase]);
 
   const confirmRequest = async (id) => {
     const updated_at = new Date().toISOString();
-    const { error } = await supabase
+    await supabase
       .from('maintenance_requests')
       .update({ status: 'completed', updated_at })
       .eq('id', id);
-    if (!error) {
-      setPendingRequests((prev) => prev.filter((r) => r.id !== id));
-      const req = pendingRequests.find((r) => r.id === id);
-      setCompletedRequests((prev) => [{ ...req, updated_at }, ...prev]);
-    }
+    setPending(p => p.filter(r => r.id !== id));
+    // optionally add to completed…
   };
 
-  if (!session) return <p className="p-6 text-text">Loading session...</p>;
-  if (loading) return <p className="p-6 text-text">Loading data...</p>;
+  if (!session) return <p className="p-6">Loading session…</p>;
+  if (loading) return <p className="p-6">Loading data…</p>;
 
   return (
     <ProtectedRoute allowedRoles={['manager']}>
-      {/* full-width canvas, but with 16 rem left padding on ≥1024 px */}
-      <div className="fixed inset-y-0 right-0 lg:left-64 bg-background overflow-x-hidden">
-        {/* keep some breathing-room, but not enough to cause overflow */}
-        <div className="px-6 py-8 space-y-12">
+      <div className="absolute inset-y-0 left-16 right-0 overflow-auto bg-background p-6 space-y-12">
+        {/* HEADER */}
+        <Card className="bg-primary">
+          <CardHeader>
+            <CardTitle className="text-center text-4xl text-primary-foreground font-bold font- uppercase">
+              {building.name}
+            </CardTitle>
+          </CardHeader>
+        </Card>
 
-          {/* HEADER ----------------------------------------------------- */}
-          <header>
-            <h1 className="text-4xl font-bold text-text mb-2">
-              Your Dashboard
-            </h1>
-            <p className="text-gray-600">
-              Overview of your buildings and maintenance requests.
-            </p>
-          </header>
-
-          {/* BUILDINGS -------------------------------------------------- */}
-          <section>
-            <h2 className="text-2xl font-semibold text-text mb-4">
-              Your Buildings
-            </h2>
-
-            {buildings.length === 0 ? (
-              <p className="text-gray-500">No buildings assigned yet.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {buildings.map((b) => (
-                  <div
-                    key={b.id}
-                    className="bg-white border-l-4 border-primary rounded-lg shadow p-6 min-w-0"
-                  >
-                    <h3 className="text-xl font-medium truncate">{b.name}</h3>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* QUICK TOOLS ------------------------------------------------ */}
-          <section>
-            <h2 className="text-2xl font-semibold text-text mb-4">Quick Tools</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-              {[
-                { href: '/manager/invite', label: 'Invite Users' },
-                { href: '/manager/select-building?next=resources', label: 'Manage Resources' },
-                { href: '/manager/select-building?next=documents', label: 'Upload Documents' },
-                { href: '/manager/select-building?next=announcements', label: 'Create Announcements' },
-              ].map((tool) => (
-                <Link
-                  key={tool.href}
-                  href={tool.href}
-                  className="block bg-white text-text rounded-lg shadow p-6 text-center hover:bg-secondary transition"
-                >
-                  {tool.label}
-                </Link>
-              ))}
-            </div>
-          </section>
-
-          {/* PENDING REQUESTS ------------------------------------------ */}
-          <section>
-            <h2 className="text-2xl font-semibold text-text mb-4">
-              Pending Maintenance Requests
-            </h2>
-
-            {pendingRequests.length === 0 ? (
-              <p className="text-gray-500">No pending requests.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {pendingRequests.map((r) => (
-                  <div
-                    key={r.id}
-                    className="flex flex-col justify-between bg-red-500 rounded-lg shadow p-6 border-l-4 border-secondary min-w-0"
-                  >
-                    <div>
-                      <h3 className="text-lg font-medium text-text">{r.title}</h3>
-                      <p className="text-sm text-gray-700 mt-2">{r.description}</p>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between">
-                      <p className="text-xs text-gray-200">
-                        {new Date(r.submitted_at).toLocaleDateString()}
+        {/* TOP ROW */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Announcements */}
+          <Card>
+            <CardHeader><CardTitle>Announcements</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              {announcements.length > 0
+                ? announcements.map(a => (
+                  <Alert key={a.id}>
+                    <AlertTitle>{a.title}</AlertTitle>
+                    <AlertDescription>
+                      {a.message}
+                      <Separator className="my-2" />
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(a.created_at).toLocaleTimeString()}
                       </p>
-                      <button
-                        onClick={() => confirmRequest(r.id)}
-                        className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark transition"
+                    </AlertDescription>
+                  </Alert>
+                ))
+                : <p className="text-center text-sm text-muted-foreground">No announcements.</p>
+              }
+            </CardContent>
+          </Card>
+          {/* Documents Preview */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Documents</CardTitle>
+              </div>
+              <select
+                value={folder || 'root'}
+                onChange={e => setFolder(e.target.value)}
+                className="mt-2 w-1/2 border rounded px-2 py-1 text-sm"
+              >
+                <option value="root">root</option>
+                {folders.map(f => (
+                  f !== 'root' && <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-48 space-y-2">
+                {docs.length > 0
+                  ? docs.slice(0, 5).map(doc => (
+                    <div key={doc.id} className="truncate">
+                      <a
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-primary"
                       >
-                        Confirm
-                      </button>
+                        {doc.title}
+                      </a>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+                  ))
+                  : <p className="text-sm text-muted-foreground">No documents.</p>
+                }
+                {docs.length > 5 && (
+                  <p className="text-xs text-center text-primary">
+                    …and {docs.length - 5} more
+                  </p>
+                )}
+              </ScrollArea>
+            </CardContent>
+          </Card>
 
-          {/* COMPLETED REQUESTS ---------------------------------------- */}
-          <section>
-            <h2 className="text-2xl font-semibold text-text mb-4">
-              Completed Maintenance Requests
-            </h2>
+          {/* Maintenance Updates */}
 
-            {completedRequests.length === 0 ? (
-              <p className="text-gray-500">No completed requests.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {completedRequests.map((r) => (
-                  <div
-                    key={r.id}
-                    className="bg-green-300 rounded-lg shadow p-6 border-l-4 border-accent min-w-0"
-                  >
-                    <h3 className="text-lg font-medium text-text">{r.title}</h3>
-                    <p className="text-sm text-gray-700 mt-2">{r.description}</p>
-                    <p className="text-xs text-gray-600 mt-4">
-                      Completed:&nbsp;
-                      {new Date(r.updated_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+        </div>
+
+        {/* BOTTOM ROW */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Schedule */}
+          <Card>
+            <CardHeader><CardTitle>Schedule</CardTitle></CardHeader>
+            <CardContent>
+              <Calendar
+                mode="single"
+                selected={calDate}
+                onSelect={setCalDate}
+                className="w-full"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Maintenance Updates</CardTitle></CardHeader>
+            <CardContent>
+              <Tabs defaultValue="pending" className="w-full">
+                <TabsList>
+                  <TabsTrigger value="pending">Pending</TabsTrigger>
+                  <TabsTrigger value="completed">Completed</TabsTrigger>
+                </TabsList>
+                <TabsContent value="pending">
+                  <ScrollArea className="h-64">
+                    {pending.length > 0
+                      ? pending.map(r => (
+                        <Card key={r.id} className="mb-4 border-l-4 border-destructive">
+                          <CardContent className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <Badge variant="destructive">Pending</Badge>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(r.submitted_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <h3 className="text-lg font-medium">{r.title}</h3>
+                            <p className="text-sm">{r.description}</p>
+                            <Button size="sm" onClick={() => confirmRequest(r.id)}>
+                              Confirm
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      ))
+                      : <p className="text-center text-sm text-muted-foreground">No pending.</p>
+                    }
+                  </ScrollArea>
+                </TabsContent>
+                <TabsContent value="completed">
+                  <ScrollArea className="h-64">
+                    {completed.length > 0
+                      ? completed.map(r => (
+                        <Card key={r.id} className="mb-4 border-l-4 border-primary">
+                          <CardContent className="space-y-2">
+                            <div className="flex justify-between">
+                              <Badge variant="outline">Completed</Badge>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(r.updated_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <h3 className="text-lg font-medium">{r.title}</h3>
+                            <p className="text-sm">{r.description}</p>
+                          </CardContent>
+                        </Card>
+                      ))
+                      : <p className="text-center text-sm text-muted-foreground">No completed.</p>
+                    }
+                  </ScrollArea>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+
+          {/* Resources */}
+          <Card>
+            <CardHeader><CardTitle>Resources</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              {resources.length > 0
+                ? resources.map(r => (
+                  <Card key={r.id} className="bg-primary/5">
+                    <CardContent className="flex justify-between items-center">
+                      <div>
+                        <h3 className="font-medium">{r.name}</h3>
+                        <p className="text-xs text-muted-foreground">
+                          {r.available_start} – {r.available_end} ({r.booking_interval_minutes} min)
+                        </p>
+                        <p className="text-sm">{r.location_description}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+                : <p className="text-center text-sm text-muted-foreground">No resources.</p>
+              }
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </ProtectedRoute>
+
+    </ProtectedRoute >
   );
 }

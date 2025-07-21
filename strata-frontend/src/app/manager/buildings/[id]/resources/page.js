@@ -1,13 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
-import { useParams } from 'next/navigation';   // ⬅️ NEW
-import { confirm } from '@/lib/confirm';           // tiny helper (see below)
+import { useParams } from 'next/navigation';
+import { confirm } from '@/lib/confirm';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 
 export default function ManagerResourcesPage() {
-    const { id: buildingId } = useParams();      // ⬅️ grab the route param
+    const { id: buildingId } = useParams();
     const supabase = useSupabaseClient();
     const user = useUser();
 
@@ -21,7 +24,7 @@ export default function ManagerResourcesPage() {
     const fetchResources = async () => {
         const { data, error } = await supabase
             .from('resources')
-            .select('id,name,is_active,total_spots,booking_interval_minutes')
+            .select('id, name, is_active, total_spots, booking_interval_minutes')
             .eq('building_id', buildingId);
 
         if (error) console.error(error);
@@ -34,63 +37,56 @@ export default function ManagerResourcesPage() {
         fetchResources();
     };
 
-    if (loading) return <p className="p-6">Loading…</p>;
-
-    const handleDelete = async id => {
+    const handleDelete = async (id) => {
         if (!(await confirm('Really delete this resource?'))) return;
         await supabase.from('resources').delete().eq('id', id);
         fetchResources();
     };
 
+    if (loading) return <p className="p-6">Loading…</p>;
+
     return (
-        <main className="p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-semibold">Manage amenities</h1>
-                <Link
-                    href={`/manager/buildings/${buildingId}/resources/new`}     // ⬅️ keep the path nested
-                    className="px-4 py-2 bg-blue-600 text-white rounded"
-                >
-                    + New resource
-                </Link>
+        <main className="p-6 space-y-6">
+            {/* Header and New Resource Button */}
+            <div>
+                <h1 className="text-2xl font-semibold mb-4">Manage Amenities</h1>
+                <Button asChild>
+                    <Link href={`/manager/buildings/${buildingId}/resources/new`}>+ New Resource</Link>
+                </Button>
             </div>
 
-            {!resources.length ? (
-                <p>No resources yet.</p>
+            {/* Empty state or grid of resources */}
+            {resources.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No resources yet.</p>
             ) : (
-                <ul className="grid gap-4">
-                    {resources.map(r => (
-                        <li key={r.id} className="p-4 border rounded-xl flex justify-between">
-                            <div>
-                                <h2 className="font-medium">{r.name}</h2>
-                                <p className="text-sm text-gray-600">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {resources.map((r) => (
+                        <Card key={r.id} className="hover:shadow-lg transition">
+                            <CardHeader>
+                                <div className="flex justify-between items-center w-full">
+                                    <CardTitle>{r.name}</CardTitle>
+                                    <Switch
+                                        checked={r.is_active}
+                                        onCheckedChange={(val) => toggleActive(r.id, val)}
+                                    />
+                                </div>
+                            </CardHeader>
+                            <CardContent className="flex justify-between items-center">
+                                <p className="text-sm text-muted-foreground">
                                     {r.total_spots} spots · {r.booking_interval_minutes}-min slots
                                 </p>
-                            </div>
-
-                            <div className="space-x-2">
-                                <Link
-                                    href={`/manager/buildings/${buildingId}/resources/${r.id}`}
-                                    className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300"
-                                >
-                                    Edit
-                                </Link>
-                                <button
-                                    onClick={() => toggleActive(r.id, !r.is_active)}
-                                    className={`px-3 py-1 rounded ${r.is_active ? 'bg-emerald-600' : 'bg-gray-400'
-                                        } text-white`}
-                                >
-                                    {r.is_active ? 'Active' : 'Inactive'}
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(r.id)}
-                                    className="px-3 py-1 rounded bg-red-600 text-white"
-                                >
-                                    Delete
-                                </button>
-                            </div>
-                        </li>
+                                <div className="space-x-2">
+                                    <Button variant="outline" size="sm" asChild>
+                                        <Link href={`/manager/buildings/${buildingId}/resources/${r.id}`}>Edit</Link>
+                                    </Button>
+                                    <Button variant="destructive" size="sm" onClick={() => handleDelete(r.id)}>
+                                        Delete
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
                     ))}
-                </ul>
+                </div>
             )}
         </main>
     );

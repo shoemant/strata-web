@@ -68,7 +68,7 @@ export default async function RootLayout({ children }) {
           {/* Sidebar + Content */}
           <div className="flex w-full">
             <NavBar />
-            <main className="flex-1 ml-64">
+            <main className="flex-1 ml-16">
               {children}
             </main>
           </div>
