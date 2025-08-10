@@ -2,19 +2,31 @@
 
 import { useEffect, useState } from 'react';
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
+import ProtectedRoute from '@/components/ProtectedRoute';
+
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Loader2 } from 'lucide-react';
 
 export default function MaintenanceRequestPage() {
   const supabase = useSupabaseClient();
   const user = useUser();
+
   const [buildingId, setBuildingId] = useState(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+
+  const [submitting, setSubmitting] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!user) return;
+      if (!user?.id) return;
       const { data, error } = await supabase
         .from('user_profiles')
         .select('building_id')
@@ -23,71 +35,105 @@ export default function MaintenanceRequestPage() {
 
       if (error) {
         console.error('Failed to fetch building:', error);
+        setErrorMsg('Failed to find your building.');
       } else {
-        setBuildingId(data.building_id);
+        setBuildingId(data?.building_id || null);
       }
     };
 
     fetchProfile();
-  }, [user]);
+  }, [user?.id, supabase]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!title || !description || !buildingId || !user) return;
+    setErrorMsg('');
+    setSuccessMsg('');
 
-    setLoading(true);
+    if (!title.trim() || !description.trim() || !buildingId || !user?.id) {
+      setErrorMsg('Please fill in all fields.');
+      return;
+    }
+
+    setSubmitting(true);
 
     const { error } = await supabase.from('maintenance_requests').insert([
       {
         user_id: user.id,
         building_id: buildingId,
-        title,
-        description,
+        title: title.trim(),
+        description: description.trim(),
       },
     ]);
 
     if (error) {
       console.error('Insert error:', error);
+      setErrorMsg('Failed to submit request.');
     } else {
-      setSuccess(true);
+      setSuccessMsg('Request submitted successfully!');
       setTitle('');
       setDescription('');
     }
 
-    setLoading(false);
+    setSubmitting(false);
   };
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Submit Maintenance Request</h1>
+    <ProtectedRoute allowedRoles={['owner']}>
+      <div className="absolute inset-y-0 left-16 right-0  bg-background p-6 space-y-12">
+        <h1 className="text-2xl font-bold tracking-tight">Submit Maintenance Request</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="text"
-          placeholder="Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-          className="w-full p-2 border rounded"
-        />
-        <textarea
-          placeholder="Describe the issue"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          required
-          className="w-full p-2 border rounded h-32"
-        />
-        <button
-          type="submit"
-          className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
-          disabled={loading}
-        >
-          {loading ? 'Submitting...' : 'Submit Request'}
-        </button>
-        {success && (
-          <p className="text-green-600 mt-2">Request submitted successfully!</p>
+        {errorMsg && (
+          <Alert variant="destructive">
+            <AlertTitle>Problem</AlertTitle>
+            <AlertDescription>{errorMsg}</AlertDescription>
+          </Alert>
         )}
-      </form>
-    </div>
+        {successMsg && (
+          <Alert>
+            <AlertTitle>Success</AlertTitle>
+            <AlertDescription>{successMsg}</AlertDescription>
+          </Alert>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Describe the issue</CardTitle>
+            <CardDescription>Be as specific as possible to help us resolve it faster.</CardDescription>
+          </CardHeader>
+          <form onSubmit={handleSubmit}>
+            <CardContent className="space-y-4">
+              <div className="grid gap-2">
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  placeholder="Leaking sink in kitchen"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="desc">Description</Label>
+                <Textarea
+                  id="desc"
+                  placeholder="Describe the problem, location, and any access instructions."
+                  className="min-h-[120px]"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  required
+                />
+              </div>
+            </CardContent>
+            <CardFooter className="justify-end">
+              <Button type="submit" disabled={submitting || !buildingId}>
+                {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {submitting ? 'Submitting…' : 'Submit Request'}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
+    </ProtectedRoute>
   );
 }
