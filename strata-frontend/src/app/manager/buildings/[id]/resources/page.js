@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
 import { useParams } from 'next/navigation';
 import { confirm } from '@/lib/confirm';
@@ -9,8 +10,11 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 
+const AMENITIES_BUCKET = 'amenities';
+
 export default function ManagerResourcesPage() {
-    const { id: buildingId } = useParams();
+    const { id: rawId } = useParams();
+    const buildingId = Array.isArray(rawId) ? rawId[0] : rawId;
     const supabase = useSupabaseClient();
     const user = useUser();
 
@@ -19,27 +23,60 @@ export default function ManagerResourcesPage() {
 
     useEffect(() => {
         if (user && buildingId) fetchResources();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, buildingId]);
 
+    const toPublicUrl = (path) => {
+        if (!path) return null;
+        const { data } = supabase.storage.from(AMENITIES_BUCKET).getPublicUrl(path);
+        return data?.publicUrl ?? null;
+    };
+
     const fetchResources = async () => {
+        setLoading(true);
         const { data, error } = await supabase
             .from('resources')
-            .select('id, name, is_active, total_spots, booking_interval_minutes')
-            .eq('building_id', buildingId);
+            .select(
+                'id, name, is_active, total_spots, booking_interval_minutes, image_path'
+            )
+            .eq('building_id', buildingId)
+            .order('name', { ascending: true });
 
-        if (error) console.error(error);
-        setResources(data || []);
+        if (error) {
+            console.error(error);
+            setResources([]);
+        } else {
+            const withUrls = (data || []).map((r) => ({
+                ...r,
+                imageUrl: r.image_path ? toPublicUrl(r.image_path) : null,
+            }));
+            setResources(withUrls);
+        }
         setLoading(false);
     };
 
     const toggleActive = async (id, value) => {
-        await supabase.from('resources').update({ is_active: value }).eq('id', id);
-        fetchResources();
+        // optimistic
+        setResources((prev) =>
+            prev.map((r) => (r.id === id ? { ...r, is_active: value } : r))
+        );
+        const { error } = await supabase
+            .from('resources')
+            .update({ is_active: value })
+            .eq('id', id);
+        if (error) {
+            console.error(error);
+            // revert if failed
+            setResources((prev) =>
+                prev.map((r) => (r.id === id ? { ...r, is_active: !value } : r))
+            );
+        }
     };
 
     const handleDelete = async (id) => {
         if (!(await confirm('Really delete this resource?'))) return;
-        await supabase.from('resources').delete().eq('id', id);
+        const { error } = await supabase.from('resources').delete().eq('id', id);
+        if (error) console.error(error);
         fetchResources();
     };
 
@@ -47,47 +84,79 @@ export default function ManagerResourcesPage() {
 
     return (
         <main className="p-6 space-y-6">
-            {/* Header and New Resource Button */}
+            {/* Header + CTA */}
+            <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-semibold">Manage Amenities</h1>
+            </div>
             <div>
-                <h1 className="text-2xl font-semibold mb-4">Manage Amenities</h1>
                 <Button asChild>
-                    <Link href={`/manager/buildings/${buildingId}/resources/new`}>+ New Resource</Link>
+                    <Link href={`/manager/buildings/${buildingId}/resources/new`}>
+                        + New Resource
+                    </Link>
                 </Button>
             </div>
 
-            {/* Empty state or grid of resources */}
-            {resources.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No resources yet.</p>
-            ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {resources.map((r) => (
-                        <Card key={r.id} className="hover:shadow-lg transition">
-                            <CardHeader>
-                                <div className="flex justify-between items-center w-full">
-                                    <CardTitle>{r.name}</CardTitle>
-                                    <Switch
-                                        checked={r.is_active}
-                                        onCheckedChange={(val) => toggleActive(r.id, val)}
-                                    />
-                                </div>
-                            </CardHeader>
-                            <CardContent className="flex justify-between items-center">
-                                <p className="text-sm text-muted-foreground">
-                                    {r.total_spots} spots · {r.booking_interval_minutes}-min slots
-                                </p>
-                                <div className="space-x-2">
-                                    <Button variant="outline" size="sm" asChild>
-                                        <Link href={`/manager/buildings/${buildingId}/resources/${r.id}`}>Edit</Link>
-                                    </Button>
-                                    <Button variant="destructive" size="sm" onClick={() => handleDelete(r.id)}>
-                                        Delete
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            )}
-        </main>
+            {/* Empty state or grid */}
+            {
+                resources.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No resources yet.</p>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {resources.map((r) => (
+                            <Card key={r.id} className="hover:shadow-lg transition">
+                                {/* Image (optional) */}
+                                {r.imageUrl && (
+                                    <div className="relative w-full h-40 rounded-t-lg overflow-hidden bg-muted">
+                                        <Image
+                                            src={r.imageUrl}
+                                            alt={r.name}
+                                            fill
+                                            className="object-cover"
+                                            sizes="(max-width: 768px) 100vw, 33vw"
+                                            priority={false}
+                                        />
+                                    </div>
+                                )}
+
+                                <CardHeader className="pb-2">
+                                    <div className="flex justify-between items-center w-full gap-4">
+                                        <CardTitle className="truncate">{r.name}</CardTitle>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-muted-foreground">Active</span>
+                                            <Switch
+                                                checked={r.is_active}
+                                                onCheckedChange={(val) => toggleActive(r.id, val)}
+                                            />
+                                        </div>
+                                    </div>
+                                </CardHeader>
+
+                                <CardContent className="flex justify-between items-center pt-0">
+                                    <p className="text-sm text-muted-foreground">
+                                        {r.total_spots} spots · {r.booking_interval_minutes}-min slots
+                                    </p>
+                                    <div className="space-x-2 shrink-0">
+                                        <Button variant="outline" size="sm" asChild>
+                                            <Link
+                                                href={`/manager/buildings/${buildingId}/resources/${r.id}`}
+                                            >
+                                                Edit
+                                            </Link>
+                                        </Button>
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => handleDelete(r.id)}
+                                        >
+                                            Delete
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                )
+            }
+        </main >
     );
 }

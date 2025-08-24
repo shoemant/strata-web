@@ -28,6 +28,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
+
+
 export default function NavBar() {
   const { role, buildings, user } = useUserContext()
   const pathname = usePathname()
@@ -42,6 +44,7 @@ export default function NavBar() {
       { href: '/manager/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
       { href: '/manager/invite', icon: UserPlus, label: 'Invite Users' },
       { href: '/manager/select-building?next=announcements', icon: Bell, label: 'Announcements' },
+
     ],
     admin: [{ href: '/admin/add-building', icon: Building2, label: 'Add Building' }],
     owner: [
@@ -74,25 +77,29 @@ export default function NavBar() {
           'bg-background border-r shadow-md',
           'flex flex-col overflow-hidden',
           'transition-[width] duration-200 ease-in-out',
-          expanded ? 'w-64' : 'w-20',
+          expanded ? 'w-64' : 'w-20', // 256px / 80px
         ].join(' ')}
       >
-        {/* Header: icon locked; text slides, icon stays centered when collapsed */}
+        {/* Header */}
         <div className="px-2 py-3">
-          <div className="grid items-center w-full grid-cols-[100%_0px] transition-[grid-template-columns] duration-200 ease-in-out"
-            style={expanded ? { gridTemplateColumns: '48px 1fr' } : undefined}>
-            {/* Icon cell (never moves) */}
+          <div
+            className="grid items-center w-full"
+            style={{ gridTemplateColumns: `${GUTTER}px 1fr` }}
+          >
+            {/* Icon stays centered in the gutter at all times */}
             <div className="flex items-center justify-center">
               <Button variant="ghost" size="icon" className="px-0" aria-label="Home">
                 <Building2 className="h-7 w-7" />
               </Button>
             </div>
-            {/* Label cell (slides in) */}
-            <div className={[
-              'overflow-hidden transition-[max-width,opacity,transform] duration-200 ease-in-out',
-              expanded ? 'opacity-100 translate-x-0 max-w-[160px]' : 'opacity-0 -translate-x-1 max-w-0',
-            ].join(' ')}
-              aria-hidden={!expanded}>
+            {/* Label slides only */}
+            <div
+              className={[
+                'overflow-hidden transition-[max-width,opacity,transform] duration-200 ease-in-out',
+                expanded ? 'opacity-100 translate-x-0 max-w-[160px]' : 'opacity-0 -translate-x-1 max-w-0',
+              ].join(' ')}
+              aria-hidden={!expanded}
+            >
               <span className="font-semibold tracking-tight whitespace-nowrap">StrataWeb</span>
             </div>
           </div>
@@ -129,20 +136,29 @@ export default function NavBar() {
 
             {role === 'manager' && (buildings || []).map((b) => (
               <div key={b.id} className="mt-4">
-                {/* Section title slides; icon column width stays as defined (centered when collapsed) */}
-                <div className={[
-                  'px-3 overflow-hidden transition-[max-width,opacity,transform] duration-200 ease-in-out',
-                  expanded ? 'opacity-100 translate-x-0 max-w-[220px]' : 'opacity-0 -translate-x-1 max-w-0',
-                ].join(' ')}
-                  aria-hidden={!expanded}>
-                  <div className="text-muted-foreground text-xs uppercase tracking-wide whitespace-nowrap">
-                    {b.name}
+                {/* Section title (slides only text) */}
+                <div
+                  className="grid items-center w-full"
+                  style={{ gridTemplateColumns: `${GUTTER}px 1fr` }}
+                >
+                  <div /> {/* empty icon cell for alignment */}
+                  <div
+                    className={[
+                      'px-3 overflow-hidden transition-[max-width,opacity,transform] duration-200 ease-in-out',
+                      expanded ? 'opacity-100 translate-x-0 max-w-[220px]' : 'opacity-0 -translate-x-1 max-w-0',
+                    ].join(' ')}
+                    aria-hidden={!expanded}
+                  >
+                    <div className="text-muted-foreground text-xs uppercase tracking-wide whitespace-nowrap">
+                      {b.name}
+                    </div>
                   </div>
                 </div>
 
                 {[
                   { href: `/manager/buildings/${b.id}/documents`, icon: FileText, label: 'Documents' },
                   { href: `/manager/buildings/${b.id}/resources`, icon: Box, label: 'Resources' },
+                  { href: `/manager/buildings/${b.id}/features`, icon: Wrench, label: 'Feature Access' }, // 👈 new link
                 ].map(({ href, icon: Icon, label }) => (
                   <NavLink
                     key={href}
@@ -156,6 +172,7 @@ export default function NavBar() {
                 ))}
               </div>
             ))}
+
           </ScrollArea>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-background to-transparent" />
         </div>
@@ -174,27 +191,26 @@ export default function NavBar() {
   )
 }
 
-/* ---------- Nav item: icon column centers on collapse, label slides ---------- */
-function NavLink({ href, onClick, Icon, label, active, expanded, indent = false }) {
-  // When collapsed: icon column takes 100%, label column 0px → icon is centered.
-  // When expanded: icon column becomes 48px (or 64px if indented), label uses the rest.
-  const expandedCols = indent ? '64px 1fr' : '48px 1fr'
+const GUTTER = 50      // collapsed sidebar width
+const ICON_BOX = 48    // actual icon box size
 
+function NavLink({ href, onClick, Icon, label, active, expanded, labelIndent = false }) {
   const content = (
-    <div
-      className="grid items-center w-full transition-[grid-template-columns] duration-200 ease-in-out"
-      style={expanded ? { gridTemplateColumns: expandedCols } : { gridTemplateColumns: '100% 0px' }}
-    >
-      {/* Icon cell (fixed spot; centered) */}
-      <div className="flex items-center justify-center">
-        <Icon className="h-6 w-6" />
+    <div className="grid items-center w-full" style={{ gridTemplateColumns: `${GUTTER}px 1fr` }}>
+      {/* Icon cell: flex box 80px wide, centers a 48px icon box */}
+      <div className="flex items-center justify-center w-full">
+        <div className="flex items-center justify-center" style={{ width: ICON_BOX, height: ICON_BOX }}>
+          <Icon className="h-6 w-6" />
+        </div>
       </div>
 
-      {/* Label cell (slides without pushing icon) */}
+      {/* Label cell slides in/out */}
       <div
         className={[
-          'overflow-hidden transition-[max-width,opacity,transform] duration-200 ease-in-out',
-          expanded ? 'opacity-100 translate-x-0 max-w-[180px]' : 'opacity-0 -translate-x-1 max-w-0',
+          'overflow-hidden transition-[max-width,opacity,transform,padding-left] duration-200 ease-in-out',
+          expanded
+            ? `opacity-100 translate-x-0 max-w-[180px] ${labelIndent ? 'pl-4' : ''}`
+            : 'opacity-0 -translate-x-1 max-w-0 pl-0',
         ].join(' ')}
         aria-hidden={!expanded}
       >
@@ -203,7 +219,8 @@ function NavLink({ href, onClick, Icon, label, active, expanded, indent = false 
     </div>
   )
 
-  const baseBtn = 'w-full h-10 rounded-xl transition bg-transparent hover:bg-accent/50 data-[active=true]:bg-secondary justify-start'
+  const baseBtn =
+    'w-full h-10 rounded-xl transition bg-transparent hover:bg-accent/50 data-[active=true]:bg-secondary justify-start'
 
   return (
     <Tooltip disableHoverableContent={expanded}>

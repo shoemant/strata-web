@@ -1,26 +1,50 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { supabase } from '@/utils/supabase/client';
+import { useEffect, useState, useMemo } from 'react';
 import { useUser } from '@supabase/auth-helpers-react';
+import { supabase } from '@/utils/supabase/client';
 import ProtectedRoute from '@/components/ProtectedRoute';
+
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardFooter,
+} from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Mail, ShieldCheck, Building, User as UserIcon } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 export default function ManagerProfilePage() {
   const user = useUser();
   const [profile, setProfile] = useState(null);
   const [buildings, setBuildings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  const initials = useMemo(() => {
+    const name = profile?.full_name?.trim() || user?.email || '';
+    const parts = name.split(/\s+/);
+    const first = parts[0]?.[0] ?? '';
+    const second = parts[1]?.[0] ?? '';
+    return (first + second || name[0] || '?').toUpperCase();
+  }, [profile?.full_name, user?.email]);
 
   useEffect(() => {
     if (user) fetchProfile();
   }, [user]);
 
-  async function fetchProfile() {
+  const fetchProfile = async () => {
+    setLoading(true);
+    setLoadError('');
+    setBuildings([]);
+
+    // Fetch manager profile
     const { data: profileData, error: profileError } = await supabase
       .from('user_profiles')
       .select('full_name, role')
@@ -29,103 +53,138 @@ export default function ManagerProfilePage() {
 
     if (profileError) {
       console.error('Failed to fetch profile:', profileError);
+      setLoadError('Failed to load profile.');
+      setProfile(null);
       setLoading(false);
       return;
     }
 
+    setProfile(profileData);
+
+    // Fetch manager’s buildings
     const { data: buildingData, error: buildingError } = await supabase
       .from('manager_buildings')
       .select('buildings!manager_buildings_building_id_fkey(id, name)')
       .eq('user_id', user.id);
 
-    if (buildingError) console.error('Failed to fetch buildings:', buildingError);
+    if (buildingError) {
+      console.error('Error fetching buildings:', buildingError);
+    } else {
+      setBuildings(buildingData?.map((b) => b.buildings) || []);
+    }
 
-    setProfile(profileData);
-    setBuildings(buildingData?.map((b) => b.buildings) || []);
     setLoading(false);
+  };
+
+  if (!user) {
+    return <div className="p-6">Loading…</div>;
   }
 
-  if (loading) return <p className="p-4">Loading profile...</p>;
-  if (!profile || profile.role !== 'manager') return <p className="p-4 text-red-600">Access denied. Manager role required.</p>;
-
-  const initial = profile.full_name?.[0] || user.email?.[0] || 'U';
+  // Soft gate before ProtectedRoute
+  if (!loading && (!profile || profile.role !== 'manager')) {
+    return (
+      <div className="p-6 max-w-xl mx-auto">
+        <Alert variant="destructive">
+          <AlertTitle>Access denied</AlertTitle>
+          <AlertDescription>Manager role required.</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <ProtectedRoute allowedRoles={['manager']}>
-      <div className="absolute inset-y-0 left-16 right-0 overflow-auto bg-background p-6 space-y-12">
-        {/* Hero Banner */}
-        <div className="flex items-center space-x-4 bg-gradient-to-r from-blue-600 to-indigo-600 p-6 rounded-lg text-white">
-          <Avatar className="ring-2 ring-white">
-            {user.email ? <AvatarImage src={user.emailAvatarUrl} /> : <AvatarFallback>{initial}</AvatarFallback>}
-          </Avatar>
-          <div>
-            <h1 className="text-3xl font-bold">Welcome, {profile.full_name}!</h1>
-            <p className="opacity-90">Here’s your profile overview at a glance.</p>
-          </div>
+      <div className="absolute inset-y-0 left-16 right-0 bg-background p-6 space-y-12">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
+          <Button variant="outline" size="sm" onClick={fetchProfile} disabled={loading}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
         </div>
 
-        {/* Profile Details Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="hover:shadow-lg transition">
-            <CardHeader>
-              <div className="flex items-center space-x-2">
-                <UserIcon className="h-5 w-5 text-blue-600" />
-                <CardTitle>Full Name</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Label>Full Name</Label>
-              <Input readOnly value={profile.full_name} />
-            </CardContent>
-          </Card>
+        {loadError && (
+          <Alert variant="destructive">
+            <AlertTitle>Something went wrong</AlertTitle>
+            <AlertDescription>{loadError}</AlertDescription>
+          </Alert>
+        )}
 
-          <Card className="hover:shadow-lg transition">
-            <CardHeader>
-              <div className="flex items-center space-x-2">
-                <Mail className="h-5 w-5 text-green-600" />
-                <CardTitle>Email</CardTitle>
+        <Card>
+          {loading ? (
+            <div className="p-6 space-y-6">
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-16 w-16 rounded-full" />
+                <div className="space-y-2 w-full">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-4 w-64" />
+                </div>
               </div>
-            </CardHeader>
-            <CardContent>
-              <Label>Email Address</Label>
-              <Input readOnly value={user.email ?? 'Unknown'} />
-            </CardContent>
-          </Card>
+              <Separator />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            </div>
+          ) : (
+            <>
+              <CardHeader className="flex-row items-center gap-4">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage alt={profile?.full_name || user.email} />
+                  <AvatarFallback>{initials}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <CardTitle className="text-xl">
+                    {profile?.full_name || 'Unnamed Manager'}
+                  </CardTitle>
+                  <div className="text-sm text-muted-foreground">{user.email}</div>
+                </div>
+                <Badge variant="secondary" className="ml-auto">
+                  {profile?.role || 'manager'}
+                </Badge>
+              </CardHeader>
 
-          <Card className="hover:shadow-lg transition">
-            <CardHeader>
-              <div className="flex items-center space-x-2">
-                <ShieldCheck className="h-5 w-5 text-purple-600" />
-                <CardTitle>Role</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Label>User Role</Label>
-              <Input readOnly value={profile.role} />
-            </CardContent>
-          </Card>
+              <Separator />
 
-          <Card className="hover:shadow-lg transition">
-            <CardHeader>
-              <div className="flex items-center space-x-2">
-                <Building className="h-5 w-5 text-yellow-600" />
-                <CardTitle>Managed Buildings</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {buildings.length > 0 ? (
-                <ul className="list-disc pl-5 space-y-1">
-                  {buildings.map((b) => (
-                    <li key={b.id}>{b.name}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p>No managed buildings.</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              <CardContent className="pt-6">
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <ProfileField label="Full Name" value={profile?.full_name || '—'} />
+                  <ProfileField label="Email" value={user.email || '—'} />
+                  <ProfileField label="Role" value={profile?.role || '—'} />
+                  <ProfileField
+                    label="Managed Buildings"
+                    value={
+                      buildings.length > 0
+                        ? buildings.map((b) => b.name).join(', ')
+                        : 'No managed buildings'
+                    }
+                  />
+                </dl>
+              </CardContent>
+
+              <CardFooter className="justify-end">
+                <Button variant="secondary" disabled>
+                  Edit (coming soon)
+                </Button>
+              </CardFooter>
+            </>
+          )}
+        </Card>
       </div>
     </ProtectedRoute>
+  );
+}
+
+/* Small display helper (label + value) */
+function ProfileField({ label, value }) {
+  return (
+    <div className="rounded-lg border bg-card text-card-foreground p-4">
+      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+        {label}
+      </div>
+      <div className="text-sm">{value}</div>
+    </div>
   );
 }

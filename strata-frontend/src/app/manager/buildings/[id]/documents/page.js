@@ -249,8 +249,9 @@ export default function DocumentsPage() {
             <Button
               onClick={handleUpload}
               disabled={!canUpload || uploading}
-              leftIcon={<UploadCloud />}
+              className="inline-flex items-center"
             >
+              <UploadCloud className="mr-2 h-4 w-4" />
               {uploading ? 'Uploading…' : 'Upload'}
             </Button>
           </CardContent>

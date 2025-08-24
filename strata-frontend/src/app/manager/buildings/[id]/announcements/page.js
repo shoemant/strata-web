@@ -1,6 +1,7 @@
+// src/app/manager/buildings/[id]/announcements/page.jsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useSupabaseClient } from '@supabase/auth-helpers-react';
 
@@ -13,7 +14,10 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, Trash2, Image as ImageIcon, X } from 'lucide-react';
+
+// Small helper — make a random id for filename
+const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 export default function AnnouncementsPage() {
   const params = useParams();
@@ -21,20 +25,46 @@ export default function AnnouncementsPage() {
   const supabase = useSupabaseClient();
 
   const [announcements, setAnnouncements] = useState([]);
-  const [form, setForm] = useState({ title: '', message: '', target_audience: 'all' });
+
+  const [form, setForm] = useState({
+    title: '',
+    subtitle: '',
+    message: '',
+    target_audience: 'all',
+    event_date: '',          // yyyy-mm-dd (optional)
+    expiry_mode: 'none',     // none | next_day | duration | exact
+    expiry_days: '14',       // used if mode == duration
+    expires_at: '',          // yyyy-mm-dd (optional, if mode == exact)
+    // style / media (not required to store in DB unless you want to)
+    use_image: true,
+    image_file: null,        // File
+    image_url: '',           // resolved URL after upload
+    text_color: '#ffffff',
+    banner_bg_color: '#1d4ed8',     // Tailwind's blue-700-ish default
+    overlay_color: '#000000',
+    overlay_opacity: 45,     // 0..100 (%)
+  });
+
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const imageInputRef = useRef(null);
 
   useEffect(() => {
     if (buildingId) fetchAnnouncements();
   }, [buildingId]);
 
+  const nowIso = useMemo(() => new Date().toISOString(), []);
+
   const fetchAnnouncements = async () => {
     setLoading(true);
+
     const { data, error } = await supabase
       .from('announcements')
       .select('*')
       .eq('building_id', buildingId)
+      .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -46,11 +76,57 @@ export default function AnnouncementsPage() {
     setLoading(false);
   };
 
+  const prettyEventDate = (iso) =>
+    iso
+      ? new Date(iso).toLocaleDateString(undefined, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+      })
+      : null;
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setForm((f) => ({ ...f, image_file: file }));
+  };
+
+  const clearSelectedImage = () => {
+    if (imageInputRef.current) imageInputRef.current.value = '';
+    setForm((f) => ({ ...f, image_file: null }));
+  };
+
+  async function uploadImageIfAny() {
+    if (!form.use_image || !form.image_file) return null; // nothing to upload
+
+    const file = form.image_file;
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const fileName = `${uid()}.${ext}`;
+    const path = `buildings/${buildingId}/announcements/${fileName}`;
+
+    const { error: upErr } = await supabase.storage
+      .from('documents')
+      .upload(path, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type || undefined,
+      });
+
+    if (upErr) {
+      console.error('Upload error:', upErr);
+      return null;
+    }
+
+    const { data: pub } = supabase.storage.from('documents').getPublicUrl(path);
+    return pub?.publicUrl || null;
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim() || !form.message.trim()) return;
 
     setPosting(true);
+
+    // auth
     const { data: userData, error: authError } = await supabase.auth.getUser();
     if (authError || !userData?.user?.id) {
       console.error('User not authenticated');
@@ -58,12 +134,58 @@ export default function AnnouncementsPage() {
       return;
     }
 
+    // Upload image (if toggled on)
+    let finalImageUrl = form.image_url || null;
+    if (form.use_image) {
+      const uploaded = await uploadImageIfAny();
+      if (uploaded) finalImageUrl = uploaded;
+    }
+
+    // event date
+    const eventDateISO = form.event_date ? new Date(form.event_date).toISOString() : null;
+
+    // expiry
+    let expires_at = null;
+    let expires_after_days = null;
+
+    if (form.expiry_mode === 'next_day') {
+      if (eventDateISO) {
+        const d = new Date(eventDateISO);
+        const explicit = new Date(d);
+        explicit.setDate(d.getDate() + 1);
+        explicit.setHours(0, 0, 0, 0);
+        expires_at = explicit.toISOString();
+      }
+    } else if (form.expiry_mode === 'duration') {
+      const n = parseInt(form.expiry_days, 10);
+      if (!Number.isNaN(n) && n > 0) {
+        expires_after_days = n;
+        const base = eventDateISO ? new Date(eventDateISO) : new Date();
+        const explicit = new Date(base);
+        explicit.setDate(base.getDate() + n);
+        explicit.setHours(0, 0, 0, 0);
+        expires_at = explicit.toISOString();
+      }
+    } else if (form.expiry_mode === 'exact') {
+      expires_at = form.expires_at ? new Date(form.expires_at).toISOString() : null;
+    }
+
+    // Build payload — include style fields if you’ve added them in DB; otherwise they’ll be ignored.
     const payload = {
       title: form.title.trim(),
+      subtitle: form.subtitle?.trim() || null,
       message: form.message.trim(),
       target_audience: form.target_audience,
       building_id: buildingId,
       created_by: userData.user.id,
+      event_date: eventDateISO,
+      expires_at,
+      expires_after_days,
+      image_url: finalImageUrl,                 // optional
+      text_color: form.text_color || null,      // optional
+      banner_bg_color: form.banner_bg_color || null,
+      overlay_color: form.overlay_color || null,
+      overlay_opacity: form.overlay_opacity,    // number 0..100; store if you add column
     };
 
     const { error } = await supabase.from('announcements').insert([payload]);
@@ -71,10 +193,60 @@ export default function AnnouncementsPage() {
     if (error) {
       console.error('Insert error:', error);
     } else {
-      setForm({ title: '', message: '', target_audience: 'all' });
+      // reset form
+      if (imageInputRef.current) imageInputRef.current.value = '';
+      setForm((f) => ({
+        ...f,
+        title: '',
+        subtitle: '',
+        message: '',
+        target_audience: 'all',
+        event_date: '',
+        expiry_mode: 'none',
+        expiry_days: '14',
+        expires_at: '',
+        image_file: null,
+        image_url: '',
+      }));
       fetchAnnouncements();
     }
     setPosting(false);
+  };
+
+  const handleDelete = async (id) => {
+    if (!id) return;
+    if (!confirm('Delete this announcement?')) return;
+    setDeletingId(id);
+    const { error } = await supabase
+      .from('announcements')
+      .delete()
+      .eq('id', id)
+      .eq('building_id', buildingId);
+    if (error) {
+      console.error('Delete error:', error);
+    } else {
+      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+    }
+    setDeletingId(null);
+  };
+
+  // ---------- PREVIEW COMPOSITION ----------
+  const preview = {
+    title: form.title || 'Announcement title',
+    subtitle: form.subtitle || (form.message ? form.message.slice(0, 120) : 'Optional subtitle or first line of message…'),
+    dateLine: form.event_date
+      ? new Date(form.event_date).toLocaleDateString(undefined, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+      })
+      : '',
+    imagePreviewUrl: form.image_file ? URL.createObjectURL(form.image_file) : form.image_url || '',
+    useImage: form.use_image,
+    textColor: form.text_color || '#ffffff',
+    bgColor: form.banner_bg_color || '#1d4ed8',
+    overlayColor: form.overlay_color || '#000000',
+    overlayOpacity: Math.max(0, Math.min(100, Number(form.overlay_opacity) || 0)), // %
   };
 
   return (
@@ -87,12 +259,14 @@ export default function AnnouncementsPage() {
         </Button>
       </div>
 
+      {/* Create / Edit */}
       <Card>
         <CardHeader>
           <CardTitle>Create new announcement</CardTitle>
         </CardHeader>
         <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
+            {/* Text fields */}
             <div className="grid gap-2">
               <Label htmlFor="title">Title</Label>
               <Input
@@ -101,6 +275,16 @@ export default function AnnouncementsPage() {
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 required
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="subtitle">Subtitle (optional)</Label>
+              <Input
+                id="subtitle"
+                placeholder="Short supporting line"
+                value={form.subtitle}
+                onChange={(e) => setForm((f) => ({ ...f, subtitle: e.target.value }))}
               />
             </div>
 
@@ -116,28 +300,181 @@ export default function AnnouncementsPage() {
               />
             </div>
 
-            {/* 👇 Copied pattern from your working component */}
+            {/* Audience & Event Date */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="audience">Target audience</Label>
+                <Select
+                  value={form.target_audience}
+                  onValueChange={(v) => setForm((f) => ({ ...f, target_audience: v }))}
+                >
+                  <SelectTrigger id="audience" className="w-full">
+                    <SelectValue placeholder="Select audience" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="owners">Owners</SelectItem>
+                    <SelectItem value="tenants">Tenants</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="event_date">Event Date (optional)</Label>
+                <Input
+                  id="event_date"
+                  type="date"
+                  value={form.event_date}
+                  onChange={(e) => setForm((f) => ({ ...f, event_date: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            {/* Expiry */}
             <div className="grid gap-2">
-              <Label htmlFor="audience">Target audience</Label>
-              <Select
-                value={form.target_audience}
-                onValueChange={(v) => setForm((f) => ({ ...f, target_audience: v }))}
-              >
-                <SelectTrigger id="audience" className="w-full">
-                  <SelectValue placeholder="Select audience" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="owners">Owners</SelectItem>
-                  <SelectItem value="tenants">Tenants</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Expiry Mode</Label>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Select
+                    value={form.expiry_mode}
+                    onValueChange={(v) => setForm((f) => ({ ...f, expiry_mode: v }))}
+                  >
+                    <SelectTrigger id="expiry_mode" className="w-full">
+                      <SelectValue placeholder="Select expiry mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None (no expiry)</SelectItem>
+                      <SelectItem value="next_day">Day after event date</SelectItem>
+                      <SelectItem value="duration">After duration</SelectItem>
+                      <SelectItem value="exact">On exact date</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {form.expiry_mode === 'duration' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="expiry_days">Duration (days)</Label>
+                    <Input
+                      id="expiry_days"
+                      type="number"
+                      min={1}
+                      placeholder="e.g., 14"
+                      value={form.expiry_days}
+                      onChange={(e) => setForm((f) => ({ ...f, expiry_days: e.target.value }))}
+                    />
+                    <div className="text-xs text-muted-foreground">For “2 weeks”, enter 14.</div>
+                  </div>
+                )}
+
+                {form.expiry_mode === 'exact' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="expires_at">Expires On</Label>
+                    <Input
+                      id="expires_at"
+                      type="date"
+                      value={form.expires_at}
+                      onChange={(e) => setForm((f) => ({ ...f, expires_at: e.target.value }))}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Media + Styles */}
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Left: Image + toggles */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    id="use_image"
+                    type="checkbox"
+                    checked={form.use_image}
+                    onChange={(e) => setForm((f) => ({ ...f, use_image: e.target.checked }))}
+                  />
+                  <Label htmlFor="use_image">Use background image</Label>
+                </div>
+
+                {form.use_image && (
+                  <div className="space-y-2">
+                    <Label htmlFor="image_file">Announcement image</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="image_file"
+                        ref={imageInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                      />
+                      {form.image_file && (
+                        <Button type="button" variant="ghost" size="icon" onClick={clearSelectedImage}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor="overlay_color">Overlay color</Label>
+                        <Input
+                          id="overlay_color"
+                          type="color"
+                          value={form.overlay_color}
+                          onChange={(e) => setForm((f) => ({ ...f, overlay_color: e.target.value }))}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="overlay_opacity">Overlay opacity (%)</Label>
+                        <Input
+                          id="overlay_opacity"
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={form.overlay_opacity}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, overlay_opacity: Number(e.target.value || 0) }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {!form.use_image && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="banner_bg_color">Background color</Label>
+                    <Input
+                      id="banner_bg_color"
+                      type="color"
+                      value={form.banner_bg_color}
+                      onChange={(e) => setForm((f) => ({ ...f, banner_bg_color: e.target.value }))}
+                    />
+                  </div>
+                )}
+
+                <div className="grid gap-2">
+                  <Label htmlFor="text_color">Text (font) color</Label>
+                  <Input
+                    id="text_color"
+                    type="color"
+                    value={form.text_color}
+                    onChange={(e) => setForm((f) => ({ ...f, text_color: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              {/* Right: Live Preview */}
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Preview</div>
+                <AnnouncementPreviewCard preview={preview} />
+                <div className="text-xs text-muted-foreground">
+                  This preview matches the banner style used on the dashboard.
+                </div>
+              </div>
             </div>
           </CardContent>
 
           <CardFooter className="justify-end">
             <Button type="submit" disabled={posting}>
-              {posting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {posting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
               {posting ? 'Posting…' : 'Post Announcement'}
             </Button>
           </CardFooter>
@@ -146,6 +483,7 @@ export default function AnnouncementsPage() {
 
       <Separator />
 
+      {/* List */}
       <div className="space-y-4">
         {loading ? (
           <>
@@ -155,9 +493,7 @@ export default function AnnouncementsPage() {
           </>
         ) : announcements.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              No announcements yet.
-            </CardContent>
+            <CardContent className="py-8 text-center text-muted-foreground">No announcements yet.</CardContent>
           </Card>
         ) : (
           announcements.map((a) => (
@@ -165,15 +501,38 @@ export default function AnnouncementsPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-4">
                   <CardTitle className="text-lg">{a.title}</CardTitle>
-                  <Badge variant="secondary" className="shrink-0">
-                    {a.target_audience || 'all'}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="shrink-0 capitalize">
+                      {a.target_audience || 'all'}
+                    </Badge>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={() => handleDelete(a.id)}
+                      disabled={deletingId === a.id}
+                      title="Delete announcement"
+                    >
+                      {deletingId === a.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                <p className="text-sm leading-relaxed">{a.message}</p>
+                {a.event_date && (
+                  <div className="text-xs text-muted-foreground">
+                    Event: <b>{prettyEventDate(a.event_date)}</b>
+                  </div>
+                )}
+                {a.subtitle && <div className="text-sm">{a.subtitle}</div>}
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{a.message}</p>
                 <div className="text-xs text-muted-foreground">
-                  {new Date(a.created_at).toLocaleString()}
+                  Posted: {new Date(a.created_at).toLocaleString()}
+                  {a.expires_at && <> · Expires: {new Date(a.expires_at).toLocaleDateString()}</>}
                 </div>
               </CardContent>
             </Card>
@@ -182,4 +541,69 @@ export default function AnnouncementsPage() {
       </div>
     </div>
   );
+}
+
+/* ---------- Visual preview card (matches dashboard banner behavior) ---------- */
+function AnnouncementPreviewCard({ preview }) {
+  const {
+    title,
+    subtitle,
+    dateLine,
+    imagePreviewUrl,
+    useImage,
+    textColor,
+    bgColor,
+    overlayColor,
+    overlayOpacity,
+  } = preview;
+
+  const overlay = useImage
+    ? `${overlayColor}${percentToHex(overlayOpacity)}`
+    : null;
+
+  return (
+    <div
+      className={[
+        'relative rounded-xl overflow-hidden border shadow-xl',
+        'h-28 md:h-32',
+      ].join(' ')}
+      style={
+        useImage && imagePreviewUrl
+          ? {
+            backgroundImage: `url(${imagePreviewUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }
+          : { backgroundColor: bgColor }
+      }
+    >
+      {useImage && imagePreviewUrl && (
+        <div
+          className="absolute inset-0"
+          style={{ backgroundColor: hexWithAlpha(overlayColor, overlayOpacity) }}
+        />
+      )}
+
+      <div className="relative h-full w-full px-4 md:px-6 flex items-center justify-between">
+        <div style={{ color: textColor }}>
+          <div className="text-[10px] md:text-xs uppercase opacity-80">Announcement</div>
+          <div className="text-base md:text-lg font-semibold leading-tight line-clamp-1">{title}</div>
+          {subtitle && <div className="text-xs md:text-sm opacity-90 line-clamp-1">{subtitle}</div>}
+          {dateLine && <div className="text-[10px] md:text-xs opacity-80 mt-1">{dateLine}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- tiny color helpers ---------- */
+function percentToHex(p) {
+  // 0..100 -> 00..FF
+  const n = Math.round((Math.max(0, Math.min(100, p)) / 100) * 255);
+  return n.toString(16).padStart(2, '0');
+}
+function hexWithAlpha(hex, p) {
+  // hex like #rrggbb, add alpha
+  if (!/^#([0-9a-f]{6})$/i.test(hex)) return hex;
+  return `${hex}${percentToHex(p)}`;
 }

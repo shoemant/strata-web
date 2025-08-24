@@ -1,86 +1,75 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 
-const WEEKDAYS = [
-    'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
-];
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export default function WeeklyAvailabilityEditor({ resourceId }) {
-    const supabase = useSupabaseClient();
-    const [rows, setRows] = useState([]);
+export default function WeeklyAvailabilityEditor({
+    opensAt = '08:00',
+    closesAt = '22:00',
+    initial = null,             // [{weekday,start_time,end_time}, ...] or null
+    onChange,                   // (rows) => void
+}) {
+    const defaultRows = useMemo(
+        () => Array.from({ length: 7 }).map((_, i) => ({
+            weekday: i,
+            start_time: opensAt,
+            end_time: closesAt,
+        })),
+        [opensAt, closesAt]
+    );
 
-    /* fetch existing rows -------------------------------------------- */
-    useEffect(() => {
-        (async () => {
-            const { data } = await supabase
-                .from('resource_availability')
-                .select('id,weekday,start_time,end_time')
-                .eq('resource_id', resourceId);
-            setRows(
-                (data || []).length
-                    ? data
-                    : WEEKDAYS.map((_, i) => ({
-                        weekday: i,
-                        start_time: '00:00',
-                        end_time: '00:00',
-                        id: null,
-                    })),
-            );
-        })();
-    }, [resourceId]);
+    const [rows, setRows] = useState(initial?.length === 7 ? initial : defaultRows);
 
-    const updateRow = (idx, field, value) =>
-        setRows(rows.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));
+    // If parent changes defaults and user hasn't customized, you can choose
+    // to auto-sync by uncommenting the effect below. Right now we keep whatever
+    // the user set inside the dialog until they click "Sync with Opens/Closes".
+    useEffect(() => { setRows(defaultRows); }, [defaultRows]);
 
-    const saveAll = async () => {
-        const inserts = rows.map(r => ({
-            resource_id: resourceId,
-            weekday: r.weekday,
-            start_time: r.start_time,
-            end_time: r.end_time,
-            id: r.id, // existing id kept for upsert
-        }));
+    useEffect(() => { onChange?.(rows); }, [rows, onChange]);
 
-        const { error } = await supabase
-            .from('resource_availability')
-            .upsert(inserts, { onConflict: 'id' });
-
-        if (error) alert(error.message);
-        else alert('Availability saved.');
+    const updateRow = (idx, field, value) => {
+        setRows((prev) => {
+            const copy = [...prev];
+            copy[idx] = { ...copy[idx], [field]: value };
+            return copy;
+        });
     };
 
-    return (
-        <section>
-            <h2 className="text-xl font-semibold mb-3">Weekly availability</h2>
 
-            <div className="space-y-2">
-                {rows.map((r, i) => (
-                    <div key={i} className="grid md:grid-cols-3 gap-2 items-center">
-                        <span>{WEEKDAYS[r.weekday]}</span>
-                        <input
-                            type="time"
-                            value={r.start_time}
-                            onChange={e => updateRow(i, 'start_time', e.target.value)}
-                            className="p-2 border rounded"
-                        />
-                        <input
-                            type="time"
-                            value={r.end_time}
-                            onChange={e => updateRow(i, 'end_time', e.target.value)}
-                            className="p-2 border rounded"
-                        />
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <h3 className="text-base font-medium">Weekly availability</h3>
+            </div>
+
+            <div className="space-y-3">
+                {rows.map((r, idx) => (
+                    <div key={r.weekday} className="grid grid-cols-12 items-center gap-3 rounded-md border p-3">
+                        <div className="col-span-3 sm:col-span-2 font-medium">{DAY_LABELS[r.weekday]}</div>
+
+                        <div className="col-span-4 sm:col-span-5">
+                            <Label className="text-xs">Start</Label>
+                            <Input
+                                type="time"
+                                value={r.start_time}
+                                onChange={(e) => updateRow(idx, 'start_time', e.target.value)}
+                            />
+                        </div>
+
+                        <div className="col-span-4 sm:col-span-5">
+                            <Label className="text-xs">End</Label>
+                            <Input
+                                type="time"
+                                value={r.end_time}
+                                onChange={(e) => updateRow(idx, 'end_time', e.target.value)}
+                            />
+                        </div>
                     </div>
                 ))}
             </div>
-
-            <button
-                onClick={saveAll}
-                className="mt-4 px-4 py-2 rounded bg-emerald-600 text-white"
-            >
-                Save availability
-            </button>
-        </section>
+        </div>
     );
 }
