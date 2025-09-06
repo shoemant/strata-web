@@ -13,7 +13,8 @@ export default function CompleteProfilePage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!user) {
+    if (session == undefined) return;
+    if (!user || !session) {
       router.push('/login');
     }
   }, [user, router]);

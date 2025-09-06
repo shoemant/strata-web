@@ -32,4 +32,7 @@ export default async function HomePage() {
     default:
       redirect('/login');
   }
+
+  // ✅ Add fallback JSX so Next.js doesn't crash before redirecting
+  return <p>Redirecting...</p>;
 }

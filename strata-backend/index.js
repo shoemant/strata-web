@@ -6,6 +6,7 @@ const authRoutes = require('./routes/auth.js');
 const inviteRoutes = require('./routes/invite.js');
 const documents = require('./routes/documents.js');
 const resourceTypeRoutes = require('./routes/resourceTypes.js');
+const checkUser = require('./routes/checkUser.js');
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ app.use('/api', authRoutes);
 app.use('/api/invite', inviteRoutes);
 app.use('/api/documents', documents);
 app.use('/api/resource-types', resourceTypeRoutes);
+app.use('/api/check-user', checkUser);
 
 // Start server
 const PORT = process.env.PORT || 3001;
