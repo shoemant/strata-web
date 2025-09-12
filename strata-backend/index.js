@@ -31,7 +31,7 @@ app.use('/api/resource-types', resourceTypeRoutes);
 app.use('/api/check-user', checkUser);
 app.use('/api/resources', resources);
 
-const PORT = process.env.PORT; // <- Required by Render
+const PORT = process.env.PORT || 3001; // <- Required by Render
 app.listen(PORT, () => {
   console.log(`✅ Backend running on port ${PORT}`);
 });

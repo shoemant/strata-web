@@ -28,7 +28,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
-
+const GUTTER = 50      // collapsed sidebar width
+const ICON_BOX = 48    // actual icon box size
 
 export default function NavBar() {
   const { role, buildings, user } = useUserContext()
@@ -38,13 +39,12 @@ export default function NavBar() {
 
   if (!user || !role) return null
 
+  // Remove global Dashboard/Announcements for managers; keep per-building versions below.
   const roleNavItems = {
     manager: [
       { href: '/manager/profile', icon: User, label: 'Profile' },
-      { href: '/manager/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
       { href: '/manager/invite', icon: UserPlus, label: 'Invite Users' },
-      { href: '/manager/select-building?next=announcements', icon: Bell, label: 'Announcements' },
-
+      // (no global dashboard/announcements here on purpose)
     ],
     admin: [{ href: '/admin/add-building', icon: Building2, label: 'Add Building' }],
     owner: [
@@ -77,7 +77,7 @@ export default function NavBar() {
           'bg-background border-r shadow-md',
           'flex flex-col overflow-hidden',
           'transition-[width] duration-200 ease-in-out',
-          expanded ? 'w-64' : 'w-20', // 256px / 80px
+          expanded ? 'w-64' : 'w-20',
         ].join(' ')}
       >
         {/* Header */}
@@ -86,13 +86,11 @@ export default function NavBar() {
             className="grid items-center w-full"
             style={{ gridTemplateColumns: `${GUTTER}px 1fr` }}
           >
-            {/* Icon stays centered in the gutter at all times */}
             <div className="flex items-center justify-center">
               <Button variant="ghost" size="icon" className="px-0" aria-label="Home">
                 <Building2 className="h-7 w-7" />
               </Button>
             </div>
-            {/* Label slides only */}
             <div
               className={[
                 'overflow-hidden transition-[max-width,opacity,transform] duration-200 ease-in-out',
@@ -134,9 +132,10 @@ export default function NavBar() {
               />
             ))}
 
+            {/* Per-building navigation for managers */}
             {role === 'manager' && (buildings || []).map((b) => (
               <div key={b.id} className="mt-4">
-                {/* Section title (slides only text) */}
+                {/* Section title */}
                 <div
                   className="grid items-center w-full"
                   style={{ gridTemplateColumns: `${GUTTER}px 1fr` }}
@@ -156,9 +155,11 @@ export default function NavBar() {
                 </div>
 
                 {[
+                  { href: `/manager/buildings/${b.id}/dashboard`, icon: LayoutDashboard, label: 'Dashboard' },
+                  { href: `/manager/buildings/${b.id}/announcements`, icon: Bell, label: 'Announcements' },
                   { href: `/manager/buildings/${b.id}/documents`, icon: FileText, label: 'Documents' },
                   { href: `/manager/buildings/${b.id}/resources`, icon: Box, label: 'Resources' },
-                  { href: `/manager/buildings/${b.id}/features`, icon: Wrench, label: 'Feature Access' }, // 👈 new link
+                  { href: `/manager/buildings/${b.id}/features`, icon: Wrench, label: 'Feature Access' },
                 ].map(({ href, icon: Icon, label }) => (
                   <NavLink
                     key={href}
@@ -167,12 +168,11 @@ export default function NavBar() {
                     label={label}
                     active={isActive(href)}
                     expanded={expanded}
-                    indent
+                    labelIndent
                   />
                 ))}
               </div>
             ))}
-
           </ScrollArea>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-background to-transparent" />
         </div>
@@ -191,13 +191,13 @@ export default function NavBar() {
   )
 }
 
-const GUTTER = 50      // collapsed sidebar width
-const ICON_BOX = 48    // actual icon box size
+function NavLink({ href, onClick, Icon, label, active, expanded, labelIndent = false, indent }) {
+  // allow either prop name; `indent` kept for backward-compat
+  const shouldIndent = labelIndent || indent
 
-function NavLink({ href, onClick, Icon, label, active, expanded, labelIndent = false }) {
   const content = (
     <div className="grid items-center w-full" style={{ gridTemplateColumns: `${GUTTER}px 1fr` }}>
-      {/* Icon cell: flex box 80px wide, centers a 48px icon box */}
+      {/* Icon cell */}
       <div className="flex items-center justify-center w-full">
         <div className="flex items-center justify-center" style={{ width: ICON_BOX, height: ICON_BOX }}>
           <Icon className="h-6 w-6" />
@@ -209,7 +209,7 @@ function NavLink({ href, onClick, Icon, label, active, expanded, labelIndent = f
         className={[
           'overflow-hidden transition-[max-width,opacity,transform,padding-left] duration-200 ease-in-out',
           expanded
-            ? `opacity-100 translate-x-0 max-w-[180px] ${labelIndent ? 'pl-4' : ''}`
+            ? `opacity-100 translate-x-0 max-w-[180px] ${shouldIndent ? 'pl-4' : ''}`
             : 'opacity-0 -translate-x-1 max-w-0 pl-0',
         ].join(' ')}
         aria-hidden={!expanded}

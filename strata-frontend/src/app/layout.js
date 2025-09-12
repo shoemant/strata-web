@@ -2,8 +2,7 @@ import '@/styles/globals.css';
 import { createServerClient } from '@supabase/ssr';
 import { cookies as getCookies } from 'next/headers';
 import ClientWrapper from './client-wrapper';
-import NavBar from '@/components/NavBar';    // ← make sure this path matches
-
+import NavBar from '@/components/NavBar';
 
 export const metadata = {
   title: 'Strata Management App',
@@ -19,6 +18,8 @@ export default async function RootLayout({ children }) {
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
+        // Note: Next will ignore sets during a pure RSC render,
+        // but this keeps Supabase SSR happy for route handlers/server actions.
         setAll: (cookiesToSet) => {
           cookiesToSet.forEach(({ name, value, options }) => {
             cookieStore.set(name, value, options);
@@ -42,7 +43,7 @@ export default async function RootLayout({ children }) {
       .eq('id', user.id)
       .single();
 
-    role = profile?.role;
+    role = profile?.role ?? null;
 
     if (role === 'manager') {
       const { data: managerBuildings } = await supabase
@@ -50,7 +51,9 @@ export default async function RootLayout({ children }) {
         .select('building_id, buildings(name, id)')
         .eq('user_id', user.id);
 
-      buildings = managerBuildings?.map((b) => b.buildings) || [];
+      buildings = (managerBuildings || [])
+        .map((row) => row?.buildings)
+        .filter(Boolean);
     } else if ((role === 'tenant' || role === 'owner') && profile?.building_id) {
       const { data: b } = await supabase
         .from('buildings')
@@ -61,14 +64,17 @@ export default async function RootLayout({ children }) {
     }
   }
 
+  // When user is not signed in, we render without the sidebar; pages (e.g. /login)
+  // can control their own layout without a forced left margin.
+  const showNav = Boolean(user && role);
+
   return (
     <html lang="en">
       <body className="flex">
         <ClientWrapper user={user} role={role} buildings={buildings}>
-          {/* Sidebar + Content */}
           <div className="flex w-full">
-            <NavBar />
-            <main className="flex-1 ml-16">
+            {showNav && <NavBar />}
+            <main className={showNav ? 'flex-1 ml-20' : 'flex-1'}>
               {children}
             </main>
           </div>

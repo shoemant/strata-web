@@ -55,7 +55,18 @@ export default function PasswordLogin() {
                 return router.push('/manager/dashboard');
             }
         }
-
+        const { data: me } = await supabase.auth.getUser();
+        const userId = me?.user?.id;
+        if (userId) {
+            const { data: profile } = await supabase
+                .from('user_profiles')
+                .select('full_name')
+                .eq('id', userId)
+                .maybeSingle();
+            if (!profile?.full_name) {
+                return router.push(`/onboarding/profile?returnTo=${encodeURIComponent('/')}`);
+            }
+        }
         router.push('/');
     };
 
