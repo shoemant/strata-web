@@ -32,6 +32,42 @@ function ProgressIndicator({ step }) {
   );
 }
 
+async function getProfileWithBuilding(supabase, userId) {
+  // Join the unit to derive building_id when role is owner/tenant
+  const { data: profile, error } = await supabase
+    .from('user_profiles')
+    .select(`
+      full_name,
+      role,
+      building_id,
+      unit_id,
+      units!user_profiles_unit_id_fkey ( building_id )  -- join via FK
+    `)
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  // Prefer explicit building_id; else derive from unit join
+  const derivedBuildingId = profile?.building_id || profile?.units?.building_id || null;
+
+  return { profile, buildingId: derivedBuildingId };
+
+}
+
+function landingPath(role, buildingId) {
+  if (role === 'manager') {
+    return buildingId ? `/manager/buildings/${buildingId}/dashboard` : `/manager/dashboard`;
+  }
+  if (role === 'owner') {
+    return buildingId ? `/owner/buildings/${buildingId}/dashboard` : `/owner/dashboard`;
+  }
+  if (role === 'tenant') {
+    return buildingId ? `/tenant/buildings/${buildingId}/dashboard` : `/tenant/dashboard`;
+  }
+  return '/';
+}
+
 export default function LoginFlowPage() {
   const router = useRouter();
   const [step, setStep] = useState('email');
@@ -93,47 +129,34 @@ export default function LoginFlowPage() {
         });
       }
 
-      // Attach any pending invites for this user's email
-      const { data: acceptData, error: acceptError } = await supabase.rpc('accept_invites_for_current_user');
-      if (acceptError) {
-        console.error('accept_invites_for_current_user error:', acceptError);
-      } else {
-        console.log('accept_invites_for_current_user:', acceptData);
-      }
+      // Accept pending invites ONCE (don’t call it twice)
+      const { error: acceptError } = await supabase.rpc('accept_invites_for_current_user');
+      if (acceptError) console.error('accept_invites_for_current_user error:', acceptError);
 
-
-      // 1) Attach any pending invites -> profile/units/invitations updated server-side
-      await supabase.rpc('accept_invites_for_current_user');
       const { data: me } = await supabase.auth.getUser();
       const userId = me?.user?.id;
       if (!userId) return router.push('/login');
 
-      // 2) Re-fetch full profile with role  associations populated by the RPC
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('full_name, role, building_id, unit_id')
-        .eq('id', userId)
-        .maybeSingle();
+      // Pull role + building via unit join
+      const { profile, buildingId } = await getProfileWithBuilding(supabase, userId);
 
-      // 3) If missing full_name, send to onboarding but preserve the intended landing
-      const landing =
-        profile?.role === 'manager' ? '/manager/dashboard'
-          : profile?.role === 'owner' ? '/owner/dashboard'
-            : profile?.role === 'tenant' ? '/tenant/dashboard'
-              : '/';
+      // Decide where to go
+      const landing = landingPath(profile?.role, buildingId);
 
+      // If missing name, go complete profile, preserving target
       if (!profile?.full_name) {
         return router.push(`/onboarding/profile?returnTo=${encodeURIComponent(landing)}`);
       }
 
-      // 4) Otherwise, go straight to their role page
       router.push(landing);
-    } catch {
+    } catch (err) {
+      console.error(err);
       setError('Something went wrong while logging in.');
     } finally {
       setLoadingLogin(false);
     }
   };
+
 
   const handleSignupSubmit = async (e) => {
     e.preventDefault();

@@ -4,6 +4,43 @@ import { useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/utils/supabase/client';
 
+// Put this near the top of each file (or extract to a shared util)
+async function getProfileWithBuilding(supabase, userId) {
+    // Join the unit to derive building_id when role is owner/tenant
+    const { data: profile, error } = await supabase
+        .from('user_profiles')
+        .select(`
+      full_name,
+      role,
+      building_id,
+      unit_id,
+      units!user_profiles_unit_id_fkey ( building_id )  -- join via FK
+    `)
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (error) throw error;
+
+    // Prefer explicit building_id; else derive from unit join
+    const derivedBuildingId = profile?.building_id || profile?.units?.building_id || null;
+
+    return { profile, buildingId: derivedBuildingId };
+}
+
+function landingPath(role, buildingId) {
+    if (role === 'manager') {
+        return buildingId ? `/manager/buildings/${buildingId}/dashboard` : `/manager/dashboard`;
+    }
+    if (role === 'owner') {
+        return buildingId ? `/owner/buildings/${buildingId}/dashboard` : `/owner/dashboard`;
+    }
+    if (role === 'tenant') {
+        return buildingId ? `/tenant/buildings/${buildingId}/dashboard` : `/tenant/dashboard`;
+    }
+    return '/';
+}
+
+
 export default function PasswordLogin() {
     const searchParams = useSearchParams();
     const email = searchParams.get('email');
@@ -14,74 +51,36 @@ export default function PasswordLogin() {
     const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
-
-        const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        });
-
-        if (loginError) {
-            setError(loginError.message);
-            return;
-        }
-
-        const user = loginData?.user;
-        if (!user) {
-            setError('Login succeeded but user data is missing.');
-            return;
-        }
-
-        await supabase.rpc('accept_invites_for_current_user');
-
-        const { data: profile } = await supabase
-            .from('user_profiles')
-            .select('full_name, role, building_id, unit_id')
-            .eq('id', user.id)
-            .maybeSingle();
-
-        const landing =
-            profile?.role === 'manager' ? '/manager/dashboard'
-                : profile?.role === 'owner' ? '/owner/dashboard'
-                    : profile?.role === 'tenant' ? '/tenant/dashboard'
-                        : '/';
-
-        if (!profile?.full_name) {
-            return router.push(`/onboarding/profile?returnTo=${encodeURIComponent(landing)}`);
-        }
-
-
-        if (!profile) {
-            const { data: managerRow } = await supabase
-                .from('manager_buildings')
-                .select('id')
-                .eq('email', user.email)
-                .eq('user_id', user.id)
-                .maybeSingle();
-
-            if (managerRow) {
-                await supabase.from('user_profiles').insert({
-                    id: user.id,
-                    email: user.email,
-                    role: 'manager',
-                });
-
-                return router.push('/manager/dashboard');
+        try {
+            const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+            if (loginError) {
+                setError(loginError.message);
+                return;
             }
-        }
-        const { data: me } = await supabase.auth.getUser();
-        const userId = me?.user?.id;
-        if (userId) {
-            const { data: profile } = await supabase
-                .from('user_profiles')
-                .select('full_name')
-                .eq('id', userId)
-                .maybeSingle();
+            const user = loginData?.user;
+            if (!user) {
+                setError('Login succeeded but user data is missing.');
+                return;
+            }
+
+            // Attach invites
+            await supabase.rpc('accept_invites_for_current_user');
+
+            // Fetch role + building via unit join
+            const { profile, buildingId } = await getProfileWithBuilding(supabase, user.id);
+            const landing = landingPath(profile?.role, buildingId);
+
             if (!profile?.full_name) {
-                return router.push(`/onboarding/profile?returnTo=${encodeURIComponent('/')}`);
+                return router.push(`/onboarding/profile?returnTo=${encodeURIComponent(landing)}`);
             }
+
+            router.push(landing);
+        } catch (err) {
+            console.error(err);
+            setError('Something went wrong while logging in.');
         }
-        router.push(landing);
     };
+
 
     return (
         <div className="min-h-screen flex items-center justify-center">
