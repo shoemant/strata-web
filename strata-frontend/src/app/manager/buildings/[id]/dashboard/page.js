@@ -529,35 +529,33 @@ export default function ManagerDashboard() {
   );
 }
 
-/* =================== Hero with *hanging* announcements =================== */
+/* =================== Hero with announcements inside the hero =================== */
 function HeroWithAnnouncements({ name, imageUrl, announcements, announcementsHref }) {
   return (
     <section className="relative">
-      <BuildingHero name={name} imageUrl={imageUrl} />
-
-      {/* Hang the deck off the bottom edge */}
-      <div
-        className="absolute left-1/2 bottom-0 z-10 w-full max-w-4xl px-3 sm:px-4"
-        style={{ transform: 'translate(-50%, 30%)' }}
-      >
-        <AnnouncementsDeck items={announcements} href={announcementsHref} />
-      </div>
-
-      {/* Spacer so content below doesn't get covered */}
-      <div className="h-12 md:h-16" />
+      <BuildingHero name={name} imageUrl={imageUrl}>
+        {/* Announcements sit below the building name, centered */}
+        <div className="mx-auto w-full max-w-4xl px-3 sm:px-4 mt-3 md:mt-4">
+          <AnnouncementsDeck items={announcements} href={announcementsHref} />
+        </div>
+      </BuildingHero>
     </section>
   );
 }
 
-/* ---------- Building hero (solid brand blue or image), centered name ---------- */
-function BuildingHero({ name, imageUrl }) {
+/* ---------- Building hero (solid brand blue or image), name on top, deck below ---------- */
+function BuildingHero({ name, imageUrl, children }) {
   const hasImage = Boolean(imageUrl);
+  const hasDeck = Boolean(children);
+
+  // Taller hero when we have the announcement deck
+  const heightClass = hasImage
+    ? hasDeck ? 'h-80 md:h-96' : 'h-48 md:h-64'
+    : hasDeck ? 'h-64 md:h-72 bg-primary' : 'h-40 md:h-48 bg-primary';
+
   return (
     <div
-      className={[
-        'relative rounded-xl overflow-hidden',
-        hasImage ? 'h-48 md:h-64' : 'h-40 md:h-48 bg-primary',
-      ].join(' ')}
+      className={['relative rounded-xl overflow-hidden', heightClass].join(' ')}
       style={
         hasImage
           ? {
@@ -577,11 +575,17 @@ function BuildingHero({ name, imageUrl }) {
           {name || '—'}
         </h1>
       </div>
+
+      {/* Content region for the deck, positioned under the name */}
+      <div className="relative h-full w-full pt-14 md:pt-16 flex items-start justify-center">
+        {/* Children (e.g., Announcements deck) */}
+        {children}
+      </div>
     </div>
   );
 }
 
-/* ---------- Announcements deck (slider) ---------- */
+/* ---------- Announcements deck (bigger banner) ---------- */
 function AnnouncementsDeck({ items, href }) {
   const [index, setIndex] = useState(0);
 
@@ -613,7 +617,10 @@ function AnnouncementsDeck({ items, href }) {
   const solidBg = !hasImg && (active?.banner_bg_color || undefined);
   const overlayRGBA =
     hasImg && active?.overlay_color && typeof active?.overlay_opacity === 'number'
-      ? hexWithAlpha(active.overlay_color, Math.max(0, Math.min(100, active.overlay_opacity)))
+      ? hexWithAlpha(
+        active.overlay_color,
+        Math.max(0, Math.min(100, active.overlay_opacity))
+      )
       : hasImg
         ? 'rgba(0,0,0,0.45)'
         : undefined;
@@ -621,8 +628,8 @@ function AnnouncementsDeck({ items, href }) {
   const subtitle =
     active?.subtitle ??
     (active?.message
-      ? active.message.length > 120
-        ? active.message.slice(0, 117) + '…'
+      ? active.message.length > 140
+        ? active.message.slice(0, 137) + '…'
         : active.message
       : '');
 
@@ -632,7 +639,8 @@ function AnnouncementsDeck({ items, href }) {
         className={[
           'relative rounded-xl shadow-xl border overflow-hidden',
           !hasImg && !solidBg ? 'bg-primary text-primary-foreground' : '',
-          'h-28 md:h-32',
+          // Increased height
+          'h-40 md:h-48',
         ].join(' ')}
         style={
           hasImg
@@ -652,11 +660,13 @@ function AnnouncementsDeck({ items, href }) {
         <div className="relative h-full w-full px-4 md:px-6 flex items-center justify-between">
           <div style={{ color: fontColor }}>
             <div className="text-[10px] md:text-xs uppercase opacity-80">Announcement</div>
-            <div className="text-base md:text-lg font-semibold leading-tight line-clamp-1">
+            <div className="text-base md:text-xl font-semibold leading-tight line-clamp-1">
               {active?.title}
             </div>
             {subtitle && (
-              <div className="text-xs md:text-sm opacity-90 line-clamp-1">{subtitle}</div>
+              <div className="text-xs md:text-sm opacity-90 line-clamp-2 md:line-clamp-2">
+                {subtitle}
+              </div>
             )}
             {formattedDate && (
               <div className="text-[10px] md:text-xs opacity-80 mt-1">{formattedDate}</div>
