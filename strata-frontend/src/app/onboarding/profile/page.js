@@ -45,12 +45,7 @@ export default function ProfileOnboardingPage() {
 
     if (error) setError(error.message);
     else {
-      const { data: fresh } = await supabase.auth.getSession();
-      if (!fresh?.session) {
-        console.warn('No session after onboarding save; redirecting to /login');
-        return router.replace('/login');
-      }
-      router.replace(returnTo);
+      router.replace(returnTo)
     }
   };
 

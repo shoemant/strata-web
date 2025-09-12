@@ -31,11 +31,24 @@ export default function PasswordLogin() {
             return;
         }
 
+        await supabase.rpc('accept_invites_for_current_user');
+
         const { data: profile } = await supabase
             .from('user_profiles')
-            .select('id')
+            .select('full_name, role, building_id, unit_id')
             .eq('id', user.id)
             .maybeSingle();
+
+        const landing =
+            profile?.role === 'manager' ? '/manager/dashboard'
+                : profile?.role === 'owner' ? '/owner/dashboard'
+                    : profile?.role === 'tenant' ? '/tenant/dashboard'
+                        : '/';
+
+        if (!profile?.full_name) {
+            return router.push(`/onboarding/profile?returnTo=${encodeURIComponent(landing)}`);
+        }
+
 
         if (!profile) {
             const { data: managerRow } = await supabase
@@ -67,7 +80,7 @@ export default function PasswordLogin() {
                 return router.push(`/onboarding/profile?returnTo=${encodeURIComponent('/')}`);
             }
         }
-        router.push('/');
+        router.push(landing);
     };
 
     return (

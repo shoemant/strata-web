@@ -101,20 +101,33 @@ export default function LoginFlowPage() {
         console.log('accept_invites_for_current_user:', acceptData);
       }
 
-      // after sign-in, check for missing profile info
+
+      // 1) Attach any pending invites -> profile/units/invitations updated server-side
+      await supabase.rpc('accept_invites_for_current_user');
       const { data: me } = await supabase.auth.getUser();
       const userId = me?.user?.id;
-      if (userId) {
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('full_name')
-          .eq('id', userId)
-          .maybeSingle();
-        if (!profile?.full_name) {
-          return router.push(`/onboarding/profile?returnTo=${encodeURIComponent('/')}`);
-        }
+      if (!userId) return router.push('/login');
+
+      // 2) Re-fetch full profile with role  associations populated by the RPC
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('full_name, role, building_id, unit_id')
+        .eq('id', userId)
+        .maybeSingle();
+
+      // 3) If missing full_name, send to onboarding but preserve the intended landing
+      const landing =
+        profile?.role === 'manager' ? '/manager/dashboard'
+          : profile?.role === 'owner' ? '/owner/dashboard'
+            : profile?.role === 'tenant' ? '/tenant/dashboard'
+              : '/';
+
+      if (!profile?.full_name) {
+        return router.push(`/onboarding/profile?returnTo=${encodeURIComponent(landing)}`);
       }
-      router.push('/');
+
+      // 4) Otherwise, go straight to their role page
+      router.push(landing);
     } catch {
       setError('Something went wrong while logging in.');
     } finally {
