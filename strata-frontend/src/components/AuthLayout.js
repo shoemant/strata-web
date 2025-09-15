@@ -6,7 +6,7 @@ export default function AuthLayout({ children }) {
         /* Pin the whole layout to the viewport with fixed positioning            */
         <div className="fixed inset-0 flex overflow-hidden">
             {/* ---------- Left column ------------------------------------------- */}
-            <div className="basis-2/3 bg-accent relative overflow-hidden">
+            <div className="basis-3/5 bg-accent relative overflow-hidden">
                 {/* cover > contain so the accent colour reaches every edge            */}
                 <Image
                     src="/images/apartment.svg"
@@ -18,8 +18,13 @@ export default function AuthLayout({ children }) {
             </div>
 
             {/* ---------- Right column ------------------------------------------ */}
-            <div className="basis-1/3 flex items-center justify-center bg-background overflow-hidden">
-                {children}
+            <div
+                className="basis-2/5 flex items-center justify-center bg-background overflow-hidden"
+            >
+                {/* Wrap children in a max-width container to prevent stretching */}
+                <div className="w-full max-w-lg px-6">
+                    {children}
+                </div>
             </div>
         </div>
     );

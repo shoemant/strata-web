@@ -24,7 +24,71 @@ export default function AnnouncementsPage() {
   const buildingId = params?.id;
   const supabase = useSupabaseClient();
 
+  const [banner, setBanner] = useState(null); // { type: 'success' | 'error', msg: string } | null
+  const bannerTimerRef = useRef(null);
+
+
+
   const [announcements, setAnnouncements] = useState([]);
+
+  const [presets, setPresets] = useState([]);
+  const [selectedPresetId, setSelectedPresetId] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false); // optional admin controls
+
+  useEffect(() => {
+    (async () => {
+      // admin check (optional)
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u?.user?.id;
+      if (uid) {
+        const { data: prof } = await supabase
+          .from('user_profiles')
+          .select('is_admin')
+          .eq('id', uid)
+          .maybeSingle();
+        setIsAdmin(Boolean(prof?.is_admin));
+      }
+
+      // fetch presets (active only)
+      const { data: pr } = await supabase
+        .from('announcement_presets')
+        .select('*')
+        .eq('is_active', true)
+        .order('title', { ascending: true });
+      setPresets(pr || []);
+    })();
+  }, [supabase]);
+
+  function presetImagePublicUrl(preset) {
+    if (!preset?.image_path) return '';
+    const { data } = supabase
+      .storage
+      .from('announcement-presets')
+      .getPublicUrl(preset.image_path);
+    return data?.publicUrl || '';
+  }
+
+  function applyPreset(preset) {
+    if (!preset) return;
+    setForm((f) => ({
+      ...f,
+      title: preset.title || '',
+      subtitle: preset.subtitle || '',
+      message: preset.message || '',
+      target_audience: preset.target_audience || 'all',
+      // style
+      text_color: preset.text_color || f.text_color,
+      banner_bg_color: preset.banner_bg_color || f.banner_bg_color,
+      overlay_color: preset.overlay_color ?? f.overlay_color,
+      overlay_opacity: typeof preset.overlay_opacity === 'number' ? preset.overlay_opacity : f.overlay_opacity,
+      // image
+      use_image: true,
+      image_file: null,
+      image_url: presetImagePublicUrl(preset),
+      // DO NOT change event_date/expiry fields—user fills these
+    }));
+  }
+
 
   const [form, setForm] = useState({
     title: '',
@@ -192,6 +256,9 @@ export default function AnnouncementsPage() {
 
     if (error) {
       console.error('Insert error:', error);
+      setBanner({ type: 'error', msg: 'Failed to post announcement. Please try again.' });
+      clearTimeout(bannerTimerRef.current);
+      bannerTimerRef.current = setTimeout(() => setBanner(null), 5000);
     } else {
       // reset form
       if (imageInputRef.current) imageInputRef.current.value = '';
@@ -209,6 +276,11 @@ export default function AnnouncementsPage() {
         image_url: '',
       }));
       fetchAnnouncements();
+
+      // success banner
+      setBanner({ type: 'success', msg: 'Announcement posted successfully!' });
+      clearTimeout(bannerTimerRef.current);
+      bannerTimerRef.current = setTimeout(() => setBanner(null), 3500);
     }
     setPosting(false);
   };
@@ -251,6 +323,26 @@ export default function AnnouncementsPage() {
 
   return (
     <div className="absolute inset-y-0 left-16 right-0  bg-background p-6 space-y-12">
+      {/* Floating success/error banner */}
+      {banner && (
+        <div
+          className={[
+            "fixed top-6 left-1/2 -translate-x-1/2 z-[9999]",
+            "px-4 py-3 rounded-lg shadow-xl text-white",
+            "transition-opacity duration-300 ease-out",
+            banner.type === "success" ? "bg-emerald-600" : "bg-red-600"
+          ].join(" ")}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center gap-2">
+            {/* simple dot icon */}
+            <span className="inline-block h-2 w-2 rounded-full bg-white/90" />
+            <span className="font-medium">{banner.msg}</span>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Announcements</h1>
         <Button variant="outline" size="sm" onClick={fetchAnnouncements} disabled={loading}>
@@ -258,6 +350,124 @@ export default function AnnouncementsPage() {
           Refresh
         </Button>
       </div>
+
+      {/* Presets Picker */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle>Announcement Presets</CardTitle>
+            <span className="text-xs text-muted-foreground">
+              Pick a preset; then set an event date.
+            </span>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            {/* Preset select */}
+            <div className="md:col-span-1 grid gap-2">
+              <Label htmlFor="preset">Preset</Label>
+              <Select
+                value={selectedPresetId || ''}
+                onValueChange={(v) => setSelectedPresetId(v || null)}
+              >
+                <SelectTrigger id="preset" className="w-full">
+                  <SelectValue placeholder={presets.length ? 'Choose a preset…' : 'No presets yet'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {presets.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Event date (binds to the same form field the lower section uses) */}
+            <div className="grid gap-2">
+              <Label htmlFor="preset_event_date">Event date</Label>
+              <Input
+                id="preset_event_date"
+                type="date"
+                value={form.event_date}
+                onChange={(e) => setForm((f) => ({ ...f, event_date: e.target.value }))}
+                // optional: prevent past dates
+                min={new Date().toISOString().slice(0, 10)}
+              />
+            </div>
+
+            {/* Apply button */}
+            <div className="flex items-end">
+              <Button
+                type="button"
+                className="w-full"
+                disabled={!selectedPresetId}
+                onClick={() => {
+                  const preset = presets.find(p => p.id === selectedPresetId);
+                  applyPreset(preset);
+                }}
+              >
+                Apply preset
+              </Button>
+            </div>
+          </div>
+
+          {/* Mini preview of the selected preset (unchanged) */}
+          {selectedPresetId && (() => {
+            const p = presets.find(pp => pp.id === selectedPresetId);
+            const url = presetImagePublicUrl(p);
+            return (
+              <div className="grid gap-2">
+                <Label>Selected preset preview</Label>
+                <div
+                  className="relative rounded-xl overflow-hidden border shadow"
+                  style={{
+                    height: '9rem',
+                    background: url
+                      ? `url(${url}) center/cover no-repeat`
+                      : p?.banner_bg_color || '#1d4ed8'
+                  }}
+                >
+                  {url && (
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        backgroundColor: `${p?.overlay_color || '#000000'}${(p?.overlay_opacity ?? 45)
+                          .toString(16).padStart(2, '0')}`
+                      }}
+                    />
+                  )}
+                  <div className="relative h-full w-full px-4 md:px-6 flex items-center">
+                    <div style={{ color: p?.text_color || '#fff' }}>
+                      <div className="text-xs uppercase opacity-80">Announcement</div>
+                      <div className="text-lg md:text-xl font-semibold leading-tight line-clamp-1">
+                        {p?.title}
+                      </div>
+                      {p?.subtitle && (
+                        <div className="text-sm opacity-90 line-clamp-1">{p.subtitle}</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </CardContent>
+
+        {isAdmin && (
+          <PresetAdminPanel
+            onCreated={async () => {
+              const { data: pr } = await supabase
+                .from('announcement_presets')
+                .select('*')
+                .eq('is_active', true)
+                .order('title', { ascending: true });
+              setPresets(pr || []);
+            }}
+          />
+        )}
+      </Card>
+
+
 
       {/* Create / Edit */}
       <Card>

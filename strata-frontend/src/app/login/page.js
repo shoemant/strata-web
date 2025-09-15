@@ -216,7 +216,7 @@ export default function LoginFlowPage() {
 
   return (
     <AuthLayout>
-      <div className="w-full max-w-sm p-8 space-y-6 bg-gradient-to-br from-blue-50 to-white rounded-2xl shadow-lg relative overflow-hidden">
+      <div className="w-full max-w-md p-8 space-y-6 bg-gradient-to-br from-blue-50 to-white rounded-2xl shadow-lg relative overflow-hidden">
         {/* Optional global dim overlay while checking */}
         {loadingEmail && <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] pointer-events-none" />}
 

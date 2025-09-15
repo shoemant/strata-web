@@ -158,7 +158,7 @@ export default function NavBar() {
                   { href: `/manager/buildings/${b.id}/dashboard`, icon: LayoutDashboard, label: 'Dashboard' },
                   { href: `/manager/buildings/${b.id}/announcements`, icon: Bell, label: 'Announcements' },
                   { href: `/manager/buildings/${b.id}/documents`, icon: FileText, label: 'Documents' },
-                  { href: `/manager/buildings/${b.id}/resources`, icon: Box, label: 'Resources' },
+                  { href: `/manager/buildings/${b.id}/resources`, icon: Box, label: 'Amenities' },
                   { href: `/manager/buildings/${b.id}/features`, icon: Wrench, label: 'Feature Access' },
                 ].map(({ href, icon: Icon, label }) => (
                   <NavLink
