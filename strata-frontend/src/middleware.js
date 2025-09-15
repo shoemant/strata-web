@@ -42,7 +42,10 @@ export async function middleware(request) {
     '/signup/manager',
     '/forgot-password',
     '/auth/callback',
-    '/images/apartment.svg'
+    '/images/apartment.svg',
+    '/images/logo.png',
+    '/images/logo-compact.png',
+    '/images/logo-cropped.png'
   ];
 
   const { pathname } = request.nextUrl;

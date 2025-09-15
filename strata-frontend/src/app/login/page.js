@@ -220,6 +220,14 @@ export default function LoginFlowPage() {
         {/* Optional global dim overlay while checking */}
         {loadingEmail && <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] pointer-events-none" />}
 
+        <div className="w-full flex justify-center mb-4">
+          <img
+            src="/images/logo.png"
+            alt="MyBuilding Logo"
+            className="w-full max-h-20 object-contain"
+          />
+        </div>
+
         <ProgressIndicator step={step} />
 
         {loadingLogin && (

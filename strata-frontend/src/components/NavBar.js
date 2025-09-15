@@ -8,6 +8,8 @@ import { useSupabaseClient } from '@supabase/auth-helpers-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import Image from 'next/image'
+
 import {
   LayoutDashboard,
   User,
@@ -80,40 +82,55 @@ export default function NavBar() {
           expanded ? 'w-64' : 'w-20',
         ].join(' ')}
       >
-        {/* Header */}
-        <div className="px-2 py-3">
-          <div
-            className="grid items-center w-full"
-            style={{ gridTemplateColumns: `${GUTTER}px 1fr` }}
-          >
-            <div className="flex items-center justify-center">
-              <Button variant="ghost" size="icon" className="px-0" aria-label="Home">
-                <Building2 className="h-7 w-7" />
-              </Button>
-            </div>
-            <div
-              className={[
-                'overflow-hidden transition-[max-width,opacity,transform] duration-200 ease-in-out',
-                expanded ? 'opacity-100 translate-x-0 max-w-[160px]' : 'opacity-0 -translate-x-1 max-w-0',
-              ].join(' ')}
-              aria-hidden={!expanded}
-            >
-              <span className="font-semibold tracking-tight whitespace-nowrap">StrataWeb</span>
-            </div>
+        {/* Header (fixed height; logo box width adapts to collapsed/expanded) */}
+        <div className="px-2 py-3 relative">
+          <div className="flex items-center justify-center h-16">
+            <Link href="/" aria-label="Home" className="block">
+              {/* The width changes, but the header height stays fixed. */}
+              <div className={`relative h-8 ${expanded ? 'w-40' : 'w-10'}`}>
+                {/* Compact logo (collapsed) */}
+                <Image
+                  src="/images/logo-compact.png"
+                  alt="My Building Logo (compact)"
+                  fill
+                  priority
+                  className={[
+                    'object-contain transition-opacity duration-200 ease-in-out',
+                    expanded ? 'opacity-0' : 'opacity-100',
+                  ].join(' ')}
+                  aria-hidden={expanded ? 'true' : 'false'}
+                />
+
+                {/* Full logo (expanded) */}
+                <Image
+                  src="/images/logo.png"
+                  alt="My Building Logo"
+                  fill
+                  priority
+                  className={[
+                    'object-contain transition-opacity duration-200 ease-in-out',
+                    expanded ? 'opacity-100' : 'opacity-0',
+                  ].join(' ')}
+                  aria-hidden={expanded ? 'false' : 'true'}
+                />
+              </div>
+            </Link>
           </div>
 
-          <div className="mt-2 flex justify-end pr-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
-              onClick={() => setExpanded((v) => !v)}
-            >
-              {expanded ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-            </Button>
-          </div>
+          {/* Expand/Collapse button pinned; doesn't consume layout width */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
+            onClick={() => setExpanded(v => !v)}
+            className="absolute right-1 top-1/2 -translate-y-1/2"
+          >
+            {expanded ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+          </Button>
         </div>
+
+
 
         <Separator />
 
