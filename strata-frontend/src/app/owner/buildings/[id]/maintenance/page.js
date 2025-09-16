@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 
@@ -12,11 +13,15 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
 
-export default function MaintenanceRequestPage() {
+export default function OwnerMaintenanceRequestPage() {
   const supabase = useSupabaseClient();
   const user = useUser();
+  const params = useParams();
+  const buildingId = Array.isArray(params?.id) ? params.id[0] : params?.id;
 
-  const [buildingId, setBuildingId] = useState(null);
+  const [canSubmit, setCanSubmit] = useState(false);
+  const [checkingAccess, setCheckingAccess] = useState(true);
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
 
@@ -24,44 +29,69 @@ export default function MaintenanceRequestPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Verify the user is an owner/tenant of a unit in this building
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user?.id) return;
+    (async () => {
+      setCheckingAccess(true);
+      setErrorMsg('');
+      setSuccessMsg('');
+
+      if (!user?.id || !buildingId) {
+        setCanSubmit(false);
+        setCheckingAccess(false);
+        return;
+      }
+
+      // unit_memberships: user must have role owner or tenant on a unit that belongs to this building
       const { data, error } = await supabase
-        .from('user_profiles')
-        .select('building_id')
-        .eq('id', user.id)
-        .single();
+        .from('unit_memberships')
+        .select(`
+          role,
+          units:units!unit_memberships_unit_id_fkey(id, building_id)
+        `)
+        .eq('user_id', user.id)
+        .in('role', ['owner', 'tenant']);
 
       if (error) {
-        console.error('Failed to fetch building:', error);
-        setErrorMsg('Failed to find your building.');
+        console.error('Access check failed:', error);
+        setErrorMsg('Could not verify your unit membership for this building.');
+        setCanSubmit(false);
       } else {
-        setBuildingId(data?.building_id || null);
+        const hasMembershipInBuilding = (data || []).some(
+          (m) => m?.units?.building_id === buildingId
+        );
+        setCanSubmit(hasMembershipInBuilding);
+        if (!hasMembershipInBuilding) {
+          setErrorMsg('You do not have a unit membership in this building.');
+        }
       }
-    };
 
-    fetchProfile();
-  }, [user?.id, supabase]);
+      setCheckingAccess(false);
+    })();
+  }, [user?.id, buildingId, supabase]);
 
-  const handleSubmit = async (e) => {
+  async function handleSubmit(e) {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!title.trim() || !description.trim() || !buildingId || !user?.id) {
+    if (!user?.id || !buildingId) {
+      setErrorMsg('Missing user or building.');
+      return;
+    }
+    if (!title.trim() || !description.trim()) {
       setErrorMsg('Please fill in all fields.');
       return;
     }
 
     setSubmitting(true);
-
     const { error } = await supabase.from('maintenance_requests').insert([
       {
         user_id: user.id,
         building_id: buildingId,
         title: title.trim(),
         description: description.trim(),
+        // status, submitted_at, updated_at use table defaults
       },
     ]);
 
@@ -73,13 +103,12 @@ export default function MaintenanceRequestPage() {
       setTitle('');
       setDescription('');
     }
-
     setSubmitting(false);
-  };
+  }
 
   return (
-    <ProtectedRoute allowedRoles={['owner']}>
-      <div className="absolute inset-y-0 left-16 right-0  bg-background p-6 space-y-12">
+    <ProtectedRoute allowedRoles={['owner', 'tenant']}>
+      <div className="absolute inset-y-0 left-16 right-0 bg-background p-6 space-y-6">
         <h1 className="text-2xl font-bold tracking-tight">Submit Maintenance Request</h1>
 
         {errorMsg && (
@@ -100,6 +129,7 @@ export default function MaintenanceRequestPage() {
             <CardTitle>Describe the issue</CardTitle>
             <CardDescription>Be as specific as possible to help us resolve it faster.</CardDescription>
           </CardHeader>
+
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               <div className="grid gap-2">
@@ -110,6 +140,7 @@ export default function MaintenanceRequestPage() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
+                  disabled={!canSubmit || checkingAccess}
                 />
               </div>
 
@@ -122,13 +153,15 @@ export default function MaintenanceRequestPage() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   required
+                  disabled={!canSubmit || checkingAccess}
                 />
               </div>
             </CardContent>
+
             <CardFooter className="justify-end">
-              <Button type="submit" disabled={submitting || !buildingId}>
-                {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {submitting ? 'Submitting…' : 'Submit Request'}
+              <Button type="submit" disabled={!canSubmit || submitting || checkingAccess}>
+                {(submitting || checkingAccess) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {checkingAccess ? 'Checking…' : submitting ? 'Submitting…' : 'Submit Request'}
               </Button>
             </CardFooter>
           </form>
