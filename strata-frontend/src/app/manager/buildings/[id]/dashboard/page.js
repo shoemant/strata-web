@@ -333,7 +333,7 @@ export default function ManagerDashboard() {
 
   return (
     <ProtectedRoute allowedRoles={['manager']}>
-      <div className="absolute inset-y-0 left-16 right-0 overflow-auto bg-background p-6 space-y-8">
+      <div className="absolute inset-y-0 left-16 right-0 overflow-auto bg-background p-6 space-y-16">
         {/* HERO + OVERLAYED (hanging) ANNOUNCEMENTS */}
         <HeroWithAnnouncements
           name={building?.name}
@@ -531,9 +531,14 @@ export default function ManagerDashboard() {
 
 /* =================== Hero with announcements inside the hero =================== */
 function HeroWithAnnouncements({ name, imageUrl, announcements, announcementsHref }) {
+  const hasDeck = (announcements?.length ?? 0) > 0;
   return (
-    // Reserve space for the hanging banner and ensure it layers above the grid
-    <section className="relative z-10">
+    <section
+      className={[
+        "relative z-10",
+        hasDeck ? "mb-[13rem] md:mb-[10rem] lg:mb-[13rem]" : ""
+      ].join(" ")}
+    >
       <BuildingHero name={name} imageUrl={imageUrl}>
         <AnnouncementsDeck items={announcements} href={announcementsHref} />
       </BuildingHero>
@@ -566,15 +571,15 @@ function BuildingHero({ name, imageUrl, children }) {
         {hasImage && <div className="absolute inset-0 bg-black/35" />}
 
         {/* Name centered at the top */}
-        <div className="absolute top-3 left-0 right-0 flex justify-center">
-          <h1 className="text-white text-xl md:text-3xl font-bold uppercase tracking-widest drop-shadow">
+        <div className="absolute top-12 left-0 right-0 flex justify-center">
+          <h1 className="text-white text-5xl md:text-7xl font-bold uppercase tracking-widest drop-shadow">
             {name || '—'}
           </h1>
         </div>
       </div>
 
       {/* HANGING BANNER: positioned outside the clipped box, layered above cards */}
-      <div className="absolute left-1/2 top-[60%] -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl px-3 sm:px-4 z-30">
+      <div className="absolute left-1/2 top-[100%] -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl px-3 sm:px-4 z-30">
         {children}
       </div>
 

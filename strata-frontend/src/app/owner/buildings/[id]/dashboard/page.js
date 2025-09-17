@@ -481,8 +481,14 @@ export default function OwnerDashboard() {
 
 /* =================== Hero with announcements inside the hero =================== */
 function HeroWithAnnouncements({ name, imageUrl, announcements, announcementsHref }) {
+  const hasDeck = (announcements?.length ?? 0) > 0;
   return (
-    <section className="relative z-10">
+    <section
+      className={[
+        "relative z-10",
+        hasDeck ? "mb-[13rem] md:mb-[10rem] lg:mb-[13rem]" : ""
+      ].join(" ")}
+    >
       <BuildingHero name={name} imageUrl={imageUrl}>
         <AnnouncementsDeck items={announcements} href={announcementsHref} />
       </BuildingHero>
@@ -509,13 +515,14 @@ function BuildingHero({ name, imageUrl, children }) {
         }
       >
         {hasImage && <div className="absolute inset-0 bg-black/35" />}
-        <div className="absolute top-3 left-0 right-0 flex justify-center">
-          <h1 className="text-white text-xl md:text-3xl font-bold uppercase tracking-widest drop-shadow">
+        <div className="absolute top-12 left-0 right-0 flex justify-center">
+          <h1 className="text-white text-5xl md:text-7xl font-bold uppercase tracking-widest drop-shadow">
             {name || '—'}
           </h1>
         </div>
       </div>
-      <div className="absolute left-1/2 top-[60%] -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl px-3 sm:px-4 z-30">
+      <div className="absolute left-1/2 top-[100%] -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl px-3 sm:px-4 z-30">
+
         {children}
       </div>
     </div>
