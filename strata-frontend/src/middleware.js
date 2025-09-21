@@ -46,7 +46,8 @@ export async function middleware(request) {
     '/images/logo.png',
     '/images/logo-compact.png',
     '/images/logo-cropped.png',
-    '/images/apartment-dark.png'
+    '/images/apartment-dark.svg',
+    '/images/apartment-dark-rescaled.svg'
   ];
 
   const { pathname } = request.nextUrl;

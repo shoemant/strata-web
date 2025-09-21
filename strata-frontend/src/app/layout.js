@@ -70,12 +70,7 @@ export default async function RootLayout({ children }) {
       <body className="flex">
         <ThemeProvider>
           <ClientWrapper user={user} role={role} buildings={buildings}>
-            <div className="flex w-full">
-              {showNav && <NavBar />}
-              <main className={showNav ? "flex-1 ml-20" : "flex-1"}>
-                {children}
-              </main>
-            </div>
+            {children}
           </ClientWrapper>
         </ThemeProvider>
       </body>

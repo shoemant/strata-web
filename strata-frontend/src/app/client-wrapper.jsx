@@ -9,7 +9,7 @@ export default function ClientWrapper({ children }) {
     <SupabaseProvider>
       <UserContextProvider>
         <NavBar />
-        <main className="p-4">{children}</main>
+        <main>{children}</main>
       </UserContextProvider>
     </SupabaseProvider>
   );

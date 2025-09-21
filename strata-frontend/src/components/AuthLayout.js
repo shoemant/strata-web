@@ -29,7 +29,7 @@ export default function AuthLayout({ children }) {
                 />
                 {/* Dark image */}
                 <Image
-                    src="/images/apartment-dark.png"
+                    src="/images/apartment-dark.svg"
                     alt="Apartment illustration dark"
                     fill
                     priority

@@ -21,7 +21,7 @@ export default function GlobalHeader({ title, rightSlot, leftSlot }) {
       className="sticky top-0 z-30 glass-effect border-b border-border/30 h-16"
       style={{ ['--header-h']: '4rem' }} // 4rem = 64px
     >
-      <div className="container mx-auto px-6 py-4">
+      <div className="w-full px-6 py-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4 min-w-0">
             {leftSlot}

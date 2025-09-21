@@ -360,9 +360,9 @@ export default function ManagerDashboard() {
 
   return (
     <ProtectedRoute allowedRoles={["manager"]}>
-      <div className="min-h-screen bg-background transition-colors duration-500 ease-in-out">
+      <div className="absolute top-16 bottom-0 left-16 right-0 overflow-auto bg-background p-6">
 
-        <div className="container mx-auto px-6 py-8 space-y-8">
+        <div className="w-full max-w-none pt-2 space-y-6">
           <HeroWithAnnouncements
             name={building?.name}
             imageUrl={building?.hero_image_url}
@@ -739,7 +739,7 @@ function BuildingHero({ name, imageUrl, children }) {
         )}
 
         {/* Name centered at the top */}
-        <div className="absolute top-12 left-0 right-0 flex justify-center">
+        <div className="absolute top-6 left-0 right-0 flex justify-center">
           <h1
             className={[
               "text-5xl md:text-7xl font-bold uppercase tracking-widest drop-shadow-lg",
