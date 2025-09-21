@@ -6,7 +6,7 @@ import { useSupabaseClient } from '@supabase/auth-helpers-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Folder, FolderOpen, File as FileIcon, ChevronLeft, Home, ChevronRight } from 'lucide-react';
+import { Folder, FolderOpen, File as FileIcon, ChevronLeft, Home, ChevronRight,   ArrowUpRight, } from 'lucide-react';
 
 export default function FolderExplorerCard({ buildingId, allDocsHref }) {
   const supabase = useSupabaseClient();
@@ -139,116 +139,117 @@ export default function FolderExplorerCard({ buildingId, allDocsHref }) {
   const showingChildFolders = currentPath ? childFolders : topLevelFolders;
   const nothingHere = !loading && showingChildFolders.length === 0 && docs.length === 0;
 
-  return (
-    <Card className="h-full">
-      
-      <CardHeader>
-  {/* Top row: Title + View all (matches Dashboard look) */}
-  <div className="flex items-center justify-between">
-    <CardTitle>Documents</CardTitle>
-    {allDocsHref && (
-      <Link href={allDocsHref}>
-        <Button variant="ghost" size="sm">View all</Button>
-      </Link>
-    )}
-  </div>
 
-  {/* Second row: nav controls / breadcrumbs */}
-  <div className="mt-2 flex items-center gap-2">
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      aria-label="Up one level"
-      onClick={currentPath ? goUp : undefined}
-      disabled={!currentPath}
-    >
-      <ChevronLeft className="h-5 w-5" />
-    </Button>
 
-    <div className="flex items-center gap-1 text-sm">
+  
+return (
+  <CardContent className="space-y-4">
+    {/* Breadcrumbs & Navigation */}
+    <div className="flex items-center gap-2">
+      {/* Back button */}
       <Button
-        variant={currentPath === '' ? 'secondary' : 'ghost'}
-        size="sm"
-        onClick={goHome}
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="hover:bg-muted/20"
+        aria-label="Up one level"
+        onClick={currentPath ? goUp : undefined}
+        disabled={!currentPath}
       >
-        <Home className="h-4 w-4 mr-1" />
-        root
+        <ChevronLeft className="h-5 w-5" />
       </Button>
 
-      {crumbs.map((seg, i) => (
-        <React.Fragment key={`${seg}-${i}`}>
-          <ChevronRight className="h-4 w-4 opacity-70" />
-          <Button
-            variant={i === crumbs.length - 1 ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setCurrentPath(crumbs.slice(0, i + 1).join('/'))}
-          >
-            {seg}
-          </Button>
-        </React.Fragment>
-      ))}
+      {/* Breadcrumbs */}
+      <div className="flex items-center gap-1 text-sm">
+        <Button
+          variant={currentPath === '' ? 'secondary' : 'ghost'}
+          size="sm"
+          className="hover:bg-muted/20"
+          onClick={goHome}
+        >
+          <Home className="h-4 w-4 mr-1" />
+          Home
+        </Button>
+
+        {crumbs.map((seg, i) => (
+          <React.Fragment key={`${seg}-${i}`}>
+            <ChevronRight className="h-4 w-4 opacity-70" />
+            <Button
+              variant={i === crumbs.length - 1 ? 'secondary' : 'ghost'}
+              size="sm"
+              className="hover:bg-muted/20"
+              onClick={() => setCurrentPath(crumbs.slice(0, i + 1).join('/'))}
+            >
+              {seg}
+            </Button>
+          </React.Fragment>
+        ))}
+      </div>
     </div>
-  </div>
-</CardHeader>
 
+    {/* Loading and Empty States */}
+    {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
-      <CardContent className="space-y-3">
-        {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+    {!loading && nothingHere && (
+      <div className="text-center py-8">
+        <FileIcon className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
+        <p className="text-muted-foreground">No folders or files.</p>
+      </div>
+    )}
 
-        {!loading && nothingHere && (
-          <p className="text-sm text-muted-foreground">No folders or files.</p>
-        )}
-
-        {!loading && !nothingHere && (
-          <div className="space-y-3">
-            {/* Folders grid */}
-            {showingChildFolders.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {showingChildFolders.map((name) => (
-                  <button
-                    key={name}
-                    onClick={() => openChild(name)}
-                    className="w-full rounded-lg border hover:bg-accent/50 px-3 py-2 flex items-center justify-between"
-                    title={`Open ${name}`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <Folder className="h-4 w-4" />
-                      <span className="font-medium">{name}</span>
-                    </span>
-                    <FolderOpen className="h-4 w-4 opacity-70" />
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Files list */}
-            {docs.length > 0 && (
-              <ScrollArea className="h-40 pr-2">
-                <ul className="space-y-2">
-                  {docs.map((doc) => (
-                    <li key={doc.id} className="flex items-center justify-between">
-                      <a
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 underline hover:text-primary truncate"
-                        title={doc.title}
-                      >
-                        <FileIcon className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{doc.title}</span>
-                      </a>
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        {doc.created_at ? new Date(doc.created_at).toLocaleDateString() : ''}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </ScrollArea>
-            )}
+    {/* Folders and Files */}
+    {!loading && !nothingHere && (
+      <div className="space-y-4">
+        {/* Folders grid */}
+        {showingChildFolders.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {showingChildFolders.map((name) => (
+              <button
+                key={name}
+                onClick={() => openChild(name)}
+                className="w-full rounded-lg border border-border/30 bg-muted/20 hover:bg-muted/30 px-3 py-2 flex items-center justify-between transition-colors"
+                title={`Open ${name}`}
+              >
+                <span className="flex items-center gap-2">
+                  <Folder className="h-4 w-4 text-primary" />
+                  <span className="font-medium">{name}</span>
+                </span>
+                <FolderOpen className="h-4 w-4 text-muted-foreground" />
+              </button>
+            ))}
           </div>
         )}
-      </CardContent>
-    </Card>
-  );
+
+        {/* Files list */}
+        {docs.length > 0 && (
+          <ScrollArea className="h-40 pr-2">
+            <ul className="space-y-2">
+              {docs.map((doc) => (
+                <li
+                  key={doc.id}
+                  className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-muted/20 transition-colors"
+                >
+                  <a
+                    href={doc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 underline hover:text-primary truncate"
+                    title={doc.title}
+                  >
+                    <FileIcon className="h-4 w-4 text-primary shrink-0" />
+                    <span className="truncate">{doc.title}</span>
+                  </a>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {doc.created_at ? new Date(doc.created_at).toLocaleDateString() : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </ScrollArea>
+        )}
+      </div>
+    )}
+  </CardContent>
+)
+
 }

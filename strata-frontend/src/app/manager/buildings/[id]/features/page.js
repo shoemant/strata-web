@@ -227,24 +227,6 @@ export default function BuildingFeaturesPage() {
     return (
         <ProtectedRoute allowedRoles={['manager']}>
             <div className="absolute inset-y-0 left-16 right-0 bg-background p-6 space-y-8">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold tracking-tight">Feature Access</h1>
-                    <Badge variant="secondary">{building?.name || '—'}</Badge>
-                </div>
-
-                {/* Debug banner (dev or ?debug=1) */}
-                {showDebug && (
-                    <div className="p-3 mb-4 text-xs rounded bg-yellow-100 text-yellow-900 space-y-1">
-                        <div><strong>Debug Info</strong></div>
-                        <div>buildingId: {String(buildingId)}</div>
-                        <div>session user id: {session?.user?.id || '—'}</div>
-                        <div>watchdog: {watchdog || '—'}</div>
-                        <div>loading: {String(loading)}</div>
-                        <div>authError: {authError || '—'}</div>
-                        <div>saveError: {saveError || '—'}</div>
-                        <div>building: {building ? JSON.stringify(building) : '—'}</div>
-                    </div>
-                )}
 
                 {saveError && (
                     <Alert variant="destructive">
@@ -259,7 +241,7 @@ export default function BuildingFeaturesPage() {
                     </Alert>
                 )}
 
-                <Card>
+                <Card className="mt-14">
                     {loading ? (
                         <CardContent className="p-6">Loading…</CardContent>
                     ) : (

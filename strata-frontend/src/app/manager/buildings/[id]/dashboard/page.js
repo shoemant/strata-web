@@ -1,120 +1,130 @@
-'use client';
+"use client"
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { useSessionContext, useSupabaseClient } from '@supabase/auth-helpers-react';
-import ProtectedRoute from '@/components/ProtectedRoute';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Calendar } from '@/components/ui/calendar';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import FolderExplorerCard from '@/components/FolderExplorerCard';
+import { useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
+import { useSessionContext, useSupabaseClient } from "@supabase/auth-helpers-react"
+import ProtectedRoute from "@/components/ProtectedRoute"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Calendar } from "@/components/ui/calendar"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+
+import ThemeToggle from "@/components/ThemeToggle"
+import { Separator } from "@/components/ui/separator"
+import {
+  ChevronLeft,
+  ChevronRight,
+  Building2,
+  Wrench,
+  CalendarIcon,
+  FileText,
+  Users,
+  TrendingUp,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  ArrowUpRight,
+} from "lucide-react"
+import FolderExplorerCard from "@/components/FolderExplorerCard"
+import ProfileDropdown from "@/components/ProfileDropdown" // Assuming ProfileDropdown is a new component
 
 /* ---------- tiny color helpers ---------- */
 function percentToHex(p) {
-  const n = Math.round((Math.max(0, Math.min(100, p)) / 100) * 255);
-  return n.toString(16).padStart(2, '0');
+  const n = Math.round((Math.max(0, Math.min(100, p)) / 100) * 255)
+  return n.toString(16).padStart(2, "0")
 }
 function hexWithAlpha(hex, p) {
-  if (!hex || !/^#([0-9a-f]{6})$/i.test(hex)) return undefined;
-  return `${hex}${percentToHex(p)}`;
+  if (!hex || !/^#([0-9a-f]{6})$/i.test(hex)) return undefined
+  return `${hex}${percentToHex(p)}`
 }
 
 export default function ManagerDashboard() {
-  const supabase = useSupabaseClient();
-  const { session, isLoading: sessionLoading } = useSessionContext();
+  const supabase = useSupabaseClient()
+  const { session, isLoading: sessionLoading } = useSessionContext()
 
-  const [building, setBuilding] = useState(null);
-  const [pending, setPending] = useState([]);
-  const [completed, setCompleted] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
-  const [resources, setResources] = useState([]);
+  const [building, setBuilding] = useState(null)
+  const [pending, setPending] = useState([])
+  const [completed, setCompleted] = useState([])
+  const [announcements, setAnnouncements] = useState([])
+  const [resources, setResources] = useState([])
 
   // document preview folder+list
-  const [folders, setFolders] = useState([]);
-  const [folder, setFolder] = useState('root');
-  const [docs, setDocs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [folders, setFolders] = useState([])
+  const [folder, setFolder] = useState("root")
+  const [docs, setDocs] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const [calDate, setCalDate] = useState(new Date());
+  const [calDate, setCalDate] = useState(new Date())
 
   // bookings for schedule view
-  const [bookings, setBookings] = useState([]);
+  const [bookings, setBookings] = useState([])
 
   // prevent reloading on each tab refocus: remember last user we loaded for
-  const loadedForUserRef = useRef(null);
-  const userId = session?.user?.id;
+  const loadedForUserRef = useRef(null)
+  const userId = session?.user?.id
 
   // Helpers
   const startOfDayISO = (d) => {
-    const x = new Date(d);
-    x.setHours(0, 0, 0, 0);
-    return x.toISOString();
-  };
+    const x = new Date(d)
+    x.setHours(0, 0, 0, 0)
+    return x.toISOString()
+  }
   const endOfDayISO = (d) => {
-    const x = new Date(d);
-    x.setHours(23, 59, 59, 999);
-    return x.toISOString();
-  };
+    const x = new Date(d)
+    x.setHours(23, 59, 59, 999)
+    return x.toISOString()
+  }
 
-  const buildingHref = (sub) =>
-    building ? `/manager/buildings/${building.id}/${sub}` : '#';
+  const buildingHref = (sub) => (building ? `/manager/buildings/${building.id}/${sub}` : "#")
 
   // Core dashboard loader (runs once per user)
   const loadDashboard = async (uid) => {
     // manager’s building
     const { data: mb } = await supabase
-      .from('manager_buildings')
-      .select('buildings!manager_buildings_building_id_fkey(name,id,hero_image_url)')
-      .eq('user_id', uid)
-      .single();
+      .from("manager_buildings")
+      .select("buildings!manager_buildings_building_id_fkey(name,id,hero_image_url)")
+      .eq("user_id", uid)
+      .single()
 
     if (!mb) {
-      setBuilding(null);
-      setPending([]);
-      setCompleted([]);
-      setAnnouncements([]);
-      setResources([]);
-      setFolders([]);
-      setDocs([]);
-      setBookings([]);
-      return;
+      setBuilding(null)
+      setPending([])
+      setCompleted([])
+      setAnnouncements([])
+      setResources([])
+      setFolders([])
+      setDocs([])
+      setBookings([])
+      return
     }
 
-    const b = mb.buildings;
+    const b = mb.buildings
 
     // hero image from documents (folder = 'building_image')
     const { data: heroDoc, error: heroErr } = await supabase
-      .from('documents')
-      .select('url')
-      .eq('building_id', b.id)
-      .eq('is_folder', false)
-      .or(
-        [
-          'folder.eq.building_image',
-          `path.ilike.documents/${b.id}/building_image/%`,
-        ].join(',')
-      )
-      .order('created_at', { ascending: false })
+      .from("documents")
+      .select("url")
+      .eq("building_id", b.id)
+      .eq("is_folder", false)
+      .or(["folder.eq.building_image", `path.ilike.documents/${b.id}/building_image/%`].join(","))
+      .order("created_at", { ascending: false })
       .limit(1)
-      .maybeSingle();
+      .maybeSingle()
 
-    if (heroErr) console.error('hero image lookup error', heroErr);
+    if (heroErr) console.error("hero image lookup error", heroErr)
 
     // Prefer newest doc; fall back to any existing column value if present
-    setBuilding({ ...b, hero_image_url: heroDoc?.url ?? b.hero_image_url ?? null });
+    setBuilding({ ...b, hero_image_url: heroDoc?.url ?? b.hero_image_url ?? null })
 
-    const nowIso = new Date().toISOString();
+    const nowIso = new Date().toISOString()
 
     const [pendRes, compRes, annRes, resRes] = await Promise.all([
-      supabase.from('maintenance_requests').select('*').eq('building_id', b.id).eq('status', 'pending'),
-      supabase.from('maintenance_requests').select('*').eq('building_id', b.id).eq('status', 'completed'),
+      supabase.from("maintenance_requests").select("*").eq("building_id", b.id).eq("status", "pending"),
+      supabase.from("maintenance_requests").select("*").eq("building_id", b.id).eq("status", "completed"),
       supabase
-        .from('announcements')
+        .from("announcements")
         .select(`
           id,
           title,
@@ -131,46 +141,44 @@ export default function ManagerDashboard() {
           overlay_color,
           overlay_opacity
         `)
-        .eq('building_id', b.id)
+        .eq("building_id", b.id)
         .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
-        .order('created_at', { ascending: false }),
-      supabase.from('resources').select('*').eq('building_id', b.id).order('name'),
-    ]);
+        .order("created_at", { ascending: false }),
+      supabase.from("resources").select("*").eq("building_id", b.id).order("name"),
+    ])
 
-    setPending(pendRes?.data || []);
-    setCompleted(compRes?.data || []);
-    setAnnouncements(annRes?.data || []);
-    setResources(resRes?.data || []);
+    setPending(pendRes?.data || [])
+    setCompleted(compRes?.data || [])
+    setAnnouncements(annRes?.data || [])
+    setResources(resRes?.data || [])
 
     // distinct folder list
     const { data: folderData } = await supabase
-      .from('documents')
-      .select('folder', { distinct: true })
-      .eq('building_id', b.id)
-      .order('folder', { ascending: true });
+      .from("documents")
+      .select("folder", { distinct: true })
+      .eq("building_id", b.id)
+      .order("folder", { ascending: true })
 
-    const list = (folderData || [])
-      .map((f) => f.folder || '')
-      .map((v) => (v === '' ? 'root' : v));
-    setFolders(Array.from(new Set(['root', ...list])));
+    const list = (folderData || []).map((f) => f.folder || "").map((v) => (v === "" ? "root" : v))
+    setFolders(Array.from(new Set(["root", ...list])))
 
     // docs preview for current folder
     const { data: docList } = await supabase
-      .from('documents')
-      .select('id,title,url,created_at,folder')
-      .eq('building_id', b.id)
-      .eq('folder', folder === 'root' ? '' : folder)
-      .order('created_at', { ascending: false });
+      .from("documents")
+      .select("id,title,url,created_at,folder")
+      .eq("building_id", b.id)
+      .eq("folder", folder === "root" ? "" : folder)
+      .order("created_at", { ascending: false })
 
-    setDocs(docList || []);
+    setDocs(docList || [])
 
     // bookings (today → +14d)
     try {
-      const start = startOfDayISO(new Date());
-      const end = endOfDayISO(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000));
+      const start = startOfDayISO(new Date())
+      const end = endOfDayISO(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000))
 
       const { data: bookingsData } = await supabase
-        .from('resource_slot_bookings')
+        .from("resource_slot_bookings")
         .select(`
           id,
           start_time,
@@ -178,10 +186,10 @@ export default function ManagerDashboard() {
           resource_id,
           resources:resources!resource_slot_bookings_resource_id_fkey(id, name, building_id)
         `)
-        .gte('start_time', start)
-        .lte('start_time', end)
-        .eq('resources.building_id', b.id)
-        .order('start_time');
+        .gte("start_time", start)
+        .lte("start_time", end)
+        .eq("resources.building_id", b.id)
+        .order("start_time")
 
       setBookings(
         (bookingsData || [])
@@ -190,120 +198,116 @@ export default function ManagerDashboard() {
             id: bk.id,
             start_time: bk.start_time,
             end_time: bk.end_time,
-            resource_name: bk.resources?.name || 'Resource',
-            type: 'booking',
-          }))
-      );
+            resource_name: bk.resources?.name || "Resource",
+            type: "booking",
+          })),
+      )
     } catch {
-      setBookings([]);
+      setBookings([])
     }
-  };
+  }
 
   // Load once per user; keep showing existing data during session revalidation
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) return
 
     // Skip if we already loaded for this user and we have core data
-    if (loadedForUserRef.current === userId && building) return;
+    if (loadedForUserRef.current === userId && building) return
 
-    let canceled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        await loadDashboard(userId);
-        if (!canceled) {
-          loadedForUserRef.current = userId;
+    let canceled = false
+      ; (async () => {
+        setLoading(true)
+        try {
+          await loadDashboard(userId)
+          if (!canceled) {
+            loadedForUserRef.current = userId
+          }
+        } finally {
+          if (!canceled) setLoading(false)
         }
-      } finally {
-        if (!canceled) setLoading(false);
-      }
-    })();
+      })()
 
     return () => {
-      canceled = true;
-    };
+      canceled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, supabase, building]);
+  }, [userId, supabase, building])
 
   // fetch docs for preview whenever building or folder changes
   useEffect(() => {
-    if (!building) return;
-    (async () => {
-      const { data } = await supabase
-        .from('documents')
-        .select('id,title,url,created_at,folder')
-        .eq('building_id', building.id)
-        .eq('folder', folder === 'root' ? '' : folder)
-        .order('created_at', { ascending: false });
-      setDocs(data || []);
-    })();
-  }, [building, folder, supabase]);
+    if (!building) return
+      ; (async () => {
+        const { data } = await supabase
+          .from("documents")
+          .select("id,title,url,created_at,folder")
+          .eq("building_id", building.id)
+          .eq("folder", folder === "root" ? "" : folder)
+          .order("created_at", { ascending: false })
+        setDocs(data || [])
+      })()
+  }, [building, folder, supabase])
 
   const confirmRequest = async (id) => {
-    const updated_at = new Date().toISOString();
-    await supabase
-      .from('maintenance_requests')
-      .update({ status: 'completed', updated_at })
-      .eq('id', id);
-    setPending((p) => p.filter((r) => r.id !== id));
-  };
+    const updated_at = new Date().toISOString()
+    await supabase.from("maintenance_requests").update({ status: "completed", updated_at }).eq("id", id)
+    setPending((p) => p.filter((r) => r.id !== id))
+  }
 
   // Build day-specific schedule items (prefer event_date for announcements)
   const scheduleItems = useMemo(() => {
-    if (!calDate) return [];
+    if (!calDate) return []
 
-    const dayStart = new Date(calDate);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(calDate);
-    dayEnd.setHours(23, 59, 59, 999);
+    const dayStart = new Date(calDate)
+    dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(calDate)
+    dayEnd.setHours(23, 59, 59, 999)
 
     const inDay = (ts) => {
-      const t = new Date(ts);
-      return t >= dayStart && t <= dayEnd;
-    };
+      const t = new Date(ts)
+      return t >= dayStart && t <= dayEnd
+    }
 
-    const fmtHM = (ts) =>
-      new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const fmtHM = (ts) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 
-    const items = [];
+    const items = []
 
     bookings
       .filter((bk) => inDay(bk.start_time))
       .forEach((bk) =>
         items.push({
           id: `bk-${bk.id}`,
-          when: fmtHM(bk.start_time) + (bk.end_time ? `–${fmtHM(bk.end_time)}` : ''),
+          when: fmtHM(bk.start_time) + (bk.end_time ? `–${fmtHM(bk.end_time)}` : ""),
           title: `Booking: ${bk.resource_name}`,
-          type: 'booking',
-          href: buildingHref('resources'),
-        })
-      );
+          type: "booking",
+          href: buildingHref("resources"),
+        }),
+      )
 
     // Announcements: use event_date if set, otherwise created_at
     announcements.forEach((a) => {
-      const ts = a.event_date || a.created_at;
+      const ts = a.event_date || a.created_at
       if (ts && inDay(ts)) {
         items.push({
           id: `ann-${a.id}`,
           when: a.event_date ? fmtHM(a.event_date) : fmtHM(a.created_at),
           title: `Announcement: ${a.title}`,
-          type: 'announcement',
-          href: buildingHref('announcements'),
-        });
+          type: "announcement",
+          href: buildingHref("announcements"),
+        })
       }
-    });
+    })
 
     pending
       .filter((r) => r.submitted_at && inDay(r.submitted_at))
       .forEach((r) =>
         items.push({
           id: `mp-${r.id}`,
-          when: r.submitted_at ? fmtHM(r.submitted_at) : '—',
+          when: r.submitted_at ? fmtHM(r.submitted_at) : "—",
           title: `Maintenance (Pending): ${r.title}`,
-          type: 'maintenance',
-          href: buildingHref('maintenance'),
-        })
-      );
+          type: "maintenance",
+          href: buildingHref("maintenance"),
+        }),
+      )
 
     completed
       .filter((r) => r.updated_at && inDay(r.updated_at))
@@ -312,269 +316,444 @@ export default function ManagerDashboard() {
           id: `mc-${r.id}`,
           when: fmtHM(r.updated_at),
           title: `Maintenance (Completed): ${r.title}`,
-          type: 'maintenance',
-          href: buildingHref('maintenance'),
-        })
-      );
+          type: "maintenance",
+          href: buildingHref("maintenance"),
+        }),
+      )
 
     items.sort((a, b) => {
-      const ta = a.when?.slice(0, 5) || '99:99';
-      const tb = b.when?.slice(0, 5) || '99:99';
-      return ta.localeCompare(tb);
-    });
+      const ta = a.when?.slice(0, 5) || "99:99"
+      const tb = b.when?.slice(0, 5) || "99:99"
+      return ta.localeCompare(tb)
+    })
 
-    return items;
-  }, [calDate, bookings, announcements, pending, completed, building]);
+    return items
+  }, [calDate, bookings, announcements, pending, completed, building])
 
   // Render guards: no flicker on session revalidation
-  if (sessionLoading) return <p className="p-6">Loading session…</p>;
-  if (!session) return <p className="p-6">You’re not signed in.</p>;
-  if (loading && !building) return <p className="p-6">Loading data…</p>;
+  if (sessionLoading)
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-muted-foreground">Loading session…</p>
+        </div>
+      </div>
+    )
+
+  if (!session)
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">You're not signed in.</p>
+      </div>
+    )
+
+  if (loading && !building)
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-muted-foreground">Loading dashboard…</p>
+        </div>
+      </div>
+    )
 
   return (
-    <ProtectedRoute allowedRoles={['manager']}>
-      <div className="absolute inset-y-0 left-16 right-0 overflow-auto bg-background p-6 space-y-16">
-        {/* HERO + OVERLAYED (hanging) ANNOUNCEMENTS */}
-        <HeroWithAnnouncements
-          name={building?.name}
-          imageUrl={building?.hero_image_url}
-          announcements={announcements}
-          announcementsHref={buildingHref('announcements')}
-        />
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left side: occupies 2/3 width */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Resources */}
-            <Card>
-              <CardHeader className="flex items-center justify-between">
-                <Link href={buildingHref('resources')} className="hover:underline">
-                  <CardTitle>Amenities</CardTitle>
-                </Link>
-                <Link href={buildingHref('resources')}>
-                  <Button variant="ghost" size="sm">View all</Button>
-                </Link>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {resources.length > 0 ? (
-                  resources.map((r) => (
-                    <Card key={r.id} className="bg-primary/5">
-                      <CardContent className="flex justify-between items-center pt-4">
-                        <div>
-                          <h3 className="font-medium">{r.name}</h3>
-                          <p className="text-xs text-muted-foreground">
-                            {r.available_start} – {r.available_end} ({r.booking_interval_minutes} min)
-                          </p>
-                          <p className="text-sm">{r.location_description}</p>
-                        </div>
-                        <Link href={buildingHref('resources')}>
-                          <Button variant="outline" size="sm">Manage</Button>
-                        </Link>
-                      </CardContent>
-                    </Card>
-                  ))
-                ) : (
-                  <p className="text-center text-sm text-muted-foreground">No resources.</p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <FolderExplorerCard
-                buildingId={building?.id}
-                allDocsHref={buildingHref('documents')}
-              />
-            </Card>
+    <ProtectedRoute allowedRoles={["manager"]}>
+      <div className="min-h-screen bg-background transition-colors duration-500 ease-in-out">
 
+        <div className="container mx-auto px-6 py-8 space-y-8">
+          <HeroWithAnnouncements
+            name={building?.name}
+            imageUrl={building?.hero_image_url}
+            announcements={announcements}
+            announcementsHref={buildingHref("announcements")}
+          />
 
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatsCard
+              title="Pending Requests"
+              value={pending.length}
+              icon={<AlertCircle className="h-5 w-5" />}
+              trend="+2 from yesterday"
+              color="destructive"
+            />
+            <StatsCard
+              title="Completed Today"
+              value={
+                completed.filter((r) => {
+                  const today = new Date().toDateString()
+                  return new Date(r.updated_at).toDateString() === today
+                }).length
+              }
+              icon={<CheckCircle2 className="h-5 w-5" />}
+              trend="+5 from yesterday"
+              color="primary"
+            />
+            <StatsCard
+              title="Active Resources"
+              value={resources.length}
+              icon={<Users className="h-5 w-5" />}
+              trend="All operational"
+              color="secondary"
+            />
+            <StatsCard
+              title="Upcoming Events"
+              value={scheduleItems.length}
+              icon={<Clock className="h-5 w-5" />}
+              trend="Next 7 days"
+              color="secondary"
+            />
           </div>
 
-          {/* Right side: occupies 1/3 width */}
-
-          <div className="lg:col-span-1 space-y-6">
-            {/* Maintenance Updates */}
-            <Card>
-              <CardHeader className="flex items-center justify-between">
-                <Link href={buildingHref('maintenance')} className="hover:underline">
-                  <CardTitle>Maintenance Updates</CardTitle>
-                </Link>
-                <Link href={buildingHref('maintenance')}>
-                  <Button variant="ghost" size="sm">View all</Button>
-                </Link>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="pending" className="w-full">
-                  <TabsList>
-                    <TabsTrigger value="pending">Pending</TabsTrigger>
-                    <TabsTrigger value="completed">Completed</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="pending">
-                    <ScrollArea className="h-64">
-                      {pending.length > 0 ? (
-                        pending.map((r) => (
-                          <Card key={r.id} className="mb-4 border-l-4 border-destructive">
-                            <CardContent className="space-y-2 pt-4">
-                              <div className="flex justify-between items-center">
-                                <Badge variant="destructive">Pending</Badge>
-                                <p className="text-xs text-muted-foreground">
-                                  {new Date(r.submitted_at).toLocaleDateString()}
-                                </p>
-                              </div>
-                              <h3 className="text-lg font-medium">{r.title}</h3>
-                              <p className="text-sm">{r.description}</p>
-                              <div className="flex gap-2">
-                                <Button size="sm" onClick={() => confirmRequest(r.id)}>
-                                  Confirm
-                                </Button>
-                                <Link href={buildingHref('maintenance')}>
-                                  <Button variant="outline" size="sm">Open</Button>
-                                </Link>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))
-                      ) : (
-                        <p className="text-center text-sm text-muted-foreground">No pending.</p>
-                      )}
-                    </ScrollArea>
-                  </TabsContent>
-                  <TabsContent value="completed">
-                    <ScrollArea className="h-64">
-                      {completed.length > 0 ? (
-                        completed.map((r) => (
-                          <Card key={r.id} className="mb-4 border-l-4 border-primary">
-                            <CardContent className="space-y-2 pt-4">
-                              <div className="flex justify-between">
-                                <Badge variant="outline">Completed</Badge>
-                                <p className="text-xs text-muted-foreground">
-                                  {new Date(r.updated_at).toLocaleDateString()}
-                                </p>
-                              </div>
-                              <h3 className="text-lg font-medium">{r.title}</h3>
-                              <p className="text-sm">{r.description}</p>
-                              <Link href={buildingHref('maintenance')}>
-                                <Button variant="outline" size="sm">Open</Button>
-                              </Link>
-                            </CardContent>
-                          </Card>
-                        ))
-                      ) : (
-                        <p className="text-center text-sm text-muted-foreground">No completed.</p>
-                      )}
-                    </ScrollArea>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Schedule</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Calendar
-                  mode="single"
-                  selected={calDate}
-                  onSelect={(d) => d && setCalDate(d)}
-                  className="w-full"
-                />
-                <Separator />
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium">
-                      {calDate.toLocaleDateString(undefined, {
-                        weekday: 'long',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </h3>
-                    <Badge variant="secondary">{scheduleItems.length} items</Badge>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left side: occupies 2/3 width */}
+            <div className="lg:col-span-2 space-y-8">
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                  <div className="flex items-center space-x-2">
+                    <Users className="h-5 w-5 text-primary" />
+                    <Link href={buildingHref("resources")} className="hover:underline">
+                      <CardTitle className="text-xl">Amenities & Resources</CardTitle>
+                    </Link>
                   </div>
-                  <ScrollArea className="h-40 pr-2">
-                    {scheduleItems.length > 0 ? (
-                      <ul className="space-y-2">
-                        {scheduleItems.map((ev) => (
-                          <li key={ev.id} className="flex items-start gap-2">
-                            <span className="text-xs mt-1 shrink-0 w-14 text-muted-foreground">
-                              {ev.when || '--:--'}
-                            </span>
-                            <div className="flex-1">
-                              <div className="text-sm">{ev.title}</div>
-                              <div className="mt-1">
-                                <Link href={ev.href} className="text-xs underline text-primary">
-                                  Open {labelForType(ev.type)}
+                  <Link href={buildingHref("resources")}>
+                    <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
+                      View all <ArrowUpRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </Link>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {resources.length > 0 ? (
+                    <div className="grid gap-4">
+                      {resources.slice(0, 3).map((r) => (
+                        <Card key={r.id} className="bg-muted/30 border-border/30 hover:bg-muted/50 transition-colors">
+                          <CardContent className="flex justify-between items-center p-4">
+                            <div className="space-y-1">
+                              <h3 className="font-medium text-foreground">{r.name}</h3>
+                              <p className="text-xs text-muted-foreground">
+                                {r.available_start} – {r.available_end} ({r.booking_interval_minutes} min intervals)
+                              </p>
+                              <p className="text-sm text-muted-foreground">{r.location_description}</p>
+                            </div>
+                            <Link href={buildingHref("resources")}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-primary/20 hover:bg-primary/10 bg-transparent"
+                              >
+                                Manage
+                              </Button>
+                            </Link>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Users className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                      <p className="text-muted-foreground">No resources configured yet.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                  <div className="flex items-center space-x-2">
+                    <FileText className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-xl">Documents</CardTitle>
+                  </div>
+                  <Link href={buildingHref("documents")}>
+                    <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
+                      View all <ArrowUpRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </Link>
+                </CardHeader>
+                <FolderExplorerCard buildingId={building?.id} allDocsHref={buildingHref("documents")} />
+              </Card>
+            </div>
+
+            {/* Right side: occupies 1/3 width */}
+            <div className="lg:col-span-1 space-y-8">
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                  <div className="flex items-center space-x-2">
+                    <Wrench className="h-5 w-5 text-primary" />
+                    <Link href={buildingHref("maintenance")} className="hover:underline">
+                      <CardTitle className="text-xl">Maintenance</CardTitle>
+                    </Link>
+                  </div>
+                  <Link href={buildingHref("maintenance")}>
+                    <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
+                      View all <ArrowUpRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </Link>
+                </CardHeader>
+                <CardContent>
+                  <Tabs defaultValue="pending" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 bg-muted/30">
+                      <TabsTrigger
+                        value="pending"
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                      >
+                        Pending ({pending.length})
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="completed"
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                      >
+                        Completed ({completed.length})
+                      </TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="pending" className="mt-4">
+                      <ScrollArea className="h-80">
+                        {pending.length > 0 ? (
+                          <div className="space-y-4">
+                            {pending.map((r) => (
+                              <Card
+                                key={r.id}
+                                className="border-l-4 border-l-destructive bg-destructive/5 border-border/30"
+                              >
+                                <CardContent className="space-y-3 p-4">
+                                  <div className="flex justify-between items-start">
+                                    <Badge
+                                      variant="destructive"
+                                      className="bg-destructive/20 text-destructive border-destructive/30"
+                                    >
+                                      <AlertCircle className="h-3 w-3 mr-1" />
+                                      Pending
+                                    </Badge>
+                                    <p className="text-xs text-muted-foreground">
+                                      {new Date(r.submitted_at).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <h3 className="font-medium text-foreground line-clamp-1">{r.title}</h3>
+                                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{r.description}</p>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      onClick={() => confirmRequest(r.id)}
+                                      className="bg-primary hover:bg-primary/90"
+                                    >
+                                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                                      Complete
+                                    </Button>
+                                    <Link href={buildingHref("maintenance")}>
+                                      <Button variant="outline" size="sm" className="border-border/50 bg-transparent">
+                                        Details
+                                      </Button>
+                                    </Link>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8">
+                            <CheckCircle2 className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                            <p className="text-muted-foreground">No pending requests.</p>
+                          </div>
+                        )}
+                      </ScrollArea>
+                    </TabsContent>
+                    <TabsContent value="completed" className="mt-4">
+                      <ScrollArea className="h-80">
+                        {completed.length > 0 ? (
+                          <div className="space-y-4">
+                            {completed.slice(0, 5).map((r) => (
+                              <Card key={r.id} className="border-l-4 border-l-primary bg-primary/5 border-border/30">
+                                <CardContent className="space-y-3 p-4">
+                                  <div className="flex justify-between items-start">
+                                    <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30">
+                                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                                      Completed
+                                    </Badge>
+                                    <p className="text-xs text-muted-foreground">
+                                      {new Date(r.updated_at).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <h3 className="font-medium text-foreground line-clamp-1">{r.title}</h3>
+                                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{r.description}</p>
+                                  </div>
+                                  <Link href={buildingHref("maintenance")}>
+                                    <Button variant="outline" size="sm" className="border-border/50 bg-transparent">
+                                      View Details
+                                    </Button>
+                                  </Link>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8">
+                            <Wrench className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                            <p className="text-muted-foreground">No completed requests.</p>
+                          </div>
+                        )}
+                      </ScrollArea>
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center space-x-2">
+                    <CalendarIcon className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-xl">Schedule</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <Calendar
+                    mode="single"
+                    selected={calDate}
+                    onSelect={(d) => d && setCalDate(d)}
+                    className="w-full border-border/30 bg-muted/20 rounded-lg"
+                  />
+                  <Separator className="bg-border/50" />
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-medium text-foreground">
+                        {calDate.toLocaleDateString(undefined, {
+                          weekday: "long",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </h3>
+                      <Badge variant="secondary" className="bg-secondary/50 text-secondary-foreground">
+                        {scheduleItems.length} items
+                      </Badge>
+                    </div>
+                    <ScrollArea className="h-48">
+                      {scheduleItems.length > 0 ? (
+                        <div className="space-y-3">
+                          {scheduleItems.map((ev) => (
+                            <div
+                              key={ev.id}
+                              className="flex items-start gap-3 p-3 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors"
+                            >
+                              <span className="text-xs font-mono mt-1 shrink-0 w-16 text-muted-foreground bg-background/50 px-2 py-1 rounded">
+                                {ev.when || "--:--"}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-foreground line-clamp-1">{ev.title}</div>
+                                <Link
+                                  href={ev.href}
+                                  className="text-xs text-primary hover:text-primary/80 inline-flex items-center mt-1"
+                                >
+                                  Open {labelForType(ev.type)} <ArrowUpRight className="h-3 w-3 ml-1" />
                                 </Link>
                               </div>
+                              <Badge variant={badgeVariantForType(ev.type)} className="shrink-0 text-xs">
+                                {labelForType(ev.type)}
+                              </Badge>
                             </div>
-                            <Badge variant={badgeVariantForType(ev.type)} className="shrink-0">
-                              {labelForType(ev.type)}
-                            </Badge>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No items for this day.</p>
-                    )}
-                  </ScrollArea>
-                </div>
-              </CardContent>
-            </Card>
-
-
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <CalendarIcon className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                          <p className="text-muted-foreground">No events scheduled for this day.</p>
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </section>
+        </div>
+      </div>
+    </ProtectedRoute>
+  )
+}
 
+/* Enhanced stats card with seamless design */
+function StatsCard({ title, value, icon, trend, color = "secondary" }) {
+  const colorClasses = {
+    primary: "border-primary/20 bg-primary/5 text-primary",
+    destructive: "border-destructive/20 bg-destructive/5 text-destructive",
+    secondary: "border-border/20 bg-muted/20 text-muted-foreground",
+  }
 
-
-
-      </div >
-    </ProtectedRoute >
-  );
+  return (
+    <div className="seamless-section rounded-2xl p-6 hover:scale-[1.02] transition-all">
+      <div className="flex items-center justify-between">
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          <p className="text-3xl font-bold text-foreground">{value}</p>
+          <p className="text-xs text-muted-foreground">{trend}</p>
+        </div>
+        <div className={`p-3 rounded-full ${colorClasses[color]}`}>{icon}</div>
+      </div>
+    </div>
+  )
 }
 
 /* =================== Hero with announcements inside the hero =================== */
 function HeroWithAnnouncements({ name, imageUrl, announcements, announcementsHref }) {
-  const hasDeck = (announcements?.length ?? 0) > 0;
+  const hasDeck = (announcements?.length ?? 0) > 0
   return (
-    <section
-      className={[
-        "relative z-10",
-        hasDeck ? "mb-[13rem] md:mb-[10rem] lg:mb-[13rem]" : ""
-      ].join(" ")}
-    >
+    <section className={["relative z-10", hasDeck ? "mb-[13rem] md:mb-[10rem] lg:mb-[13rem]" : ""].join(" ")}>
       <BuildingHero name={name} imageUrl={imageUrl}>
         <AnnouncementsDeck items={announcements} href={announcementsHref} />
       </BuildingHero>
     </section>
-  );
+  )
 }
 
-
-/* ---------- Building hero (solid brand blue or image), name on top, deck below ---------- */
+/* Enhanced building hero with modern gradient and glass effects */
 function BuildingHero({ name, imageUrl, children }) {
-  const hasImage = Boolean(imageUrl);
-  const hasDeck = Boolean(children);
+  const hasImage = Boolean(imageUrl)
+  const hasDeck = Boolean(children)
 
   // Taller hero when we have the announcement deck
-  const heightClass = hasImage
-    ? hasDeck ? 'h-80 md:h-96' : 'h-48 md:h-64'
-    : hasDeck ? 'h-64 md:h-72 bg-primary' : 'h-40 md:h-48 bg-primary';
+  const heightClass = hasImage ? (hasDeck ? "h-80 md:h-96" : "h-48 md:h-64") : hasDeck ? "h-64 md:h-72" : "h-40 md:h-48"
 
   return (
     <div className="relative">
       {/* Hero image box (this one clips its own contents) */}
       <div
-        className={['relative rounded-xl overflow-hidden', heightClass].join(' ')}
+        className={[
+          "relative rounded-2xl overflow-hidden border border-border/20",
+          heightClass,
+          !hasImage ? "bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5" : "",
+        ].join(" ")}
         style={
           hasImage
-            ? { backgroundImage: `url(${imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+            ? {
+              backgroundImage: `url(${imageUrl})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }
             : undefined
         }
       >
-        {hasImage && <div className="absolute inset-0 bg-black/35" />}
+        {hasImage && <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60" />}
+        {!hasImage && (
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-transparent to-primary/20" />
+        )}
 
         {/* Name centered at the top */}
         <div className="absolute top-12 left-0 right-0 flex justify-center">
-          <h1 className="text-white text-5xl md:text-7xl font-bold uppercase tracking-widest drop-shadow">
-            {name || '—'}
+          <h1
+            className={[
+              "text-5xl md:text-7xl font-bold uppercase tracking-widest drop-shadow-lg",
+              hasImage ? "text-white" : "gradient-text",
+            ].join(" ")}
+          >
+            {name || "—"}
           </h1>
+        </div>
+
+        {/* Decorative elements */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-4 right-4 w-32 h-32 border border-white/20 rounded-full"></div>
+          <div className="absolute bottom-4 left-4 w-24 h-24 border border-white/20 rounded-full"></div>
         </div>
       </div>
 
@@ -582,120 +761,116 @@ function BuildingHero({ name, imageUrl, children }) {
       <div className="absolute left-1/2 top-[100%] -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl px-3 sm:px-4 z-30">
         {children}
       </div>
-
     </div>
-  );
+  )
 }
 
-/* ---------- Announcements deck (bigger banner) ---------- */
+/* Enhanced announcements deck with modern glass effect */
 function AnnouncementsDeck({ items, href }) {
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(0)
 
   // Auto-rotate every 6s if multiple items
   useEffect(() => {
-    if (!items || items.length <= 1) return;
+    if (!items || items.length <= 1) return
     const id = setInterval(() => {
-      setIndex((i) => (i + 1) % items.length);
-    }, 6000);
-    return () => clearInterval(id);
-  }, [items]);
+      setIndex((i) => (i + 1) % items.length)
+    }, 6000)
+    return () => clearInterval(id)
+  }, [items])
 
-  if (!items || items.length === 0) return null;
+  if (!items || items.length === 0) return null
 
-  const active = items[index];
-  const hasImg = Boolean(active?.image_url);
+  const active = items[index]
+  const hasImg = Boolean(active?.image_url)
 
   // Prefer event_date for the small date line
   const formattedDate = active?.event_date
     ? new Date(active.event_date).toLocaleDateString(undefined, {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
+      weekday: "long",
+      month: "long",
+      day: "numeric",
     })
-    : null;
+    : null
 
   // DB-provided styles with sensible fallbacks
-  const fontColor = active?.text_color || (hasImg ? '#ffffff' : undefined);
-  const solidBg = !hasImg && (active?.banner_bg_color || undefined);
+  const fontColor = active?.text_color || (hasImg ? "#ffffff" : undefined)
+  const solidBg = !hasImg && (active?.banner_bg_color || undefined)
   const overlayRGBA =
-    hasImg && active?.overlay_color && typeof active?.overlay_opacity === 'number'
-      ? hexWithAlpha(
-        active.overlay_color,
-        Math.max(0, Math.min(100, active.overlay_opacity))
-      )
+    hasImg && active?.overlay_color && typeof active?.overlay_opacity === "number"
+      ? hexWithAlpha(active.overlay_color, Math.max(0, Math.min(100, active.overlay_opacity)))
       : hasImg
-        ? 'rgba(0,0,0,0.45)'
-        : undefined;
+        ? "rgba(0,0,0,0.45)"
+        : undefined
 
   const subtitle =
     active?.subtitle ??
-    (active?.message
-      ? active.message.length > 140
-        ? active.message.slice(0, 137) + '…'
-        : active.message
-      : '');
+    (active?.message ? (active.message.length > 140 ? active.message.slice(0, 137) + "…" : active.message) : "")
 
   return (
-    <Link href={href} className="block">
+    <Link href={href} className="block group">
       <div
         className={[
-          'relative rounded-2xl shadow-2xl ring-1 ring-black/10 border overflow-hidden backdrop-blur-[1px]',
-          !hasImg && !solidBg ? 'bg-primary text-primary-foreground' : '',
+          "relative rounded-2xl shadow-2xl ring-1 ring-white/10 border border-border/20 overflow-hidden backdrop-blur-sm",
+          "hover:shadow-3xl hover:ring-white/20 transition-all duration-300 group-hover:scale-[1.02]",
+          !hasImg && !solidBg ? "glass-effect" : "",
           // BIG banner
-          'h-[18rem] md:h-[20rem] lg:h-[22rem]',
-        ].join(' ')}
+          "h-[18rem] md:h-[20rem] lg:h-[22rem]",
+        ].join(" ")}
         style={
           hasImg
-            ? { backgroundImage: `url(${active.image_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+            ? { backgroundImage: `url(${active.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }
             : solidBg
               ? { backgroundColor: solidBg }
               : undefined
         }
       >
         {/* Overlay when image present (from DB or default) */}
-        {hasImg && <div className="absolute inset-0" style={{ backgroundColor: overlayRGBA }} />}
+        {hasImg && (
+          <div
+            className="absolute inset-0 bg-gradient-to-br from-black/60 via-transparent to-black/40"
+            style={{ backgroundColor: overlayRGBA }}
+          />
+        )}
+        {!hasImg && !solidBg && (
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-primary/10" />
+        )}
 
-        <div className="relative h-full w-full px-4 md:px-6 flex items-center justify-between">
-          <div style={{ color: fontColor }}>
-            <div className="text-xs md:text-sm uppercase opacity-80">Announcement</div>
-            <div className="text-2xl md:text-3xl font-bold leading-tight line-clamp-1">
+        <div className="relative h-full w-full px-6 md:px-8 flex items-center justify-between">
+          <div style={{ color: fontColor || (hasImg ? "#ffffff" : undefined) }} className="space-y-2">
+            <div className="text-xs md:text-sm uppercase opacity-80 tracking-wider font-medium">Announcement</div>
+            <div className="text-3xl md:text-4xl font-bold leading-tight line-clamp-2 text-balance">
               {active?.title}
             </div>
             {subtitle && (
-              <div className="text-sm md:text-base/6 opacity-90 line-clamp-2">
-                {subtitle}
-              </div>
+              <div className="text-base md:text-lg opacity-90 line-clamp-3 text-pretty max-w-2xl">{subtitle}</div>
             )}
-            {formattedDate && (
-              <div className="text-xs md:text-sm opacity-80 mt-1">{formattedDate}</div>
-            )}
+            {formattedDate && <div className="text-sm md:text-base opacity-80 mt-3 font-medium">{formattedDate}</div>}
           </div>
-
 
           {/* Controls */}
           {items.length > 1 && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <button
                 type="button"
                 aria-label="Previous"
                 onClick={(e) => {
-                  e.preventDefault();
-                  setIndex((i) => (i - 1 + items.length) % items.length);
+                  e.preventDefault()
+                  setIndex((i) => (i - 1 + items.length) % items.length)
                 }}
-                className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/85 hover:bg-white"
+                className="inline-flex items-center justify-center h-10 w-10 rounded-full glass-effect hover:bg-white/20 transition-colors"
               >
-                <ChevronLeft className="h-4 w-4 text-gray-700" />
+                <ChevronLeft className="h-5 w-5 text-white" />
               </button>
               <button
                 type="button"
                 aria-label="Next"
                 onClick={(e) => {
-                  e.preventDefault();
-                  setIndex((i) => (i + 1) % items.length);
+                  e.preventDefault()
+                  setIndex((i) => (i + 1) % items.length)
                 }}
-                className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/85 hover:bg-white"
+                className="inline-flex items-center justify-center h-10 w-10 rounded-full glass-effect hover:bg-white/20 transition-colors"
               >
-                <ChevronRight className="h-4 w-4 text-gray-700" />
+                <ChevronRight className="h-5 w-5 text-white" />
               </button>
             </div>
           )}
@@ -703,46 +878,50 @@ function AnnouncementsDeck({ items, href }) {
 
         {/* Dots */}
         {items.length > 1 && (
-          <div className="absolute bottom-1 left-0 right-0 flex items-center justify-center gap-1">
+          <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-2">
             {items.map((_, i) => (
-              <span
+              <button
                 key={i}
+                onClick={(e) => {
+                  e.preventDefault()
+                  setIndex(i)
+                }}
                 className={[
-                  'h-1.5 rounded-full transition-all',
-                  i === index ? 'w-4 bg-white' : 'w-2 bg-white/60',
-                ].join(' ')}
+                  "h-2 rounded-full transition-all duration-300",
+                  i === index ? "w-8 bg-white" : "w-2 bg-white/60 hover:bg-white/80",
+                ].join(" ")}
               />
             ))}
           </div>
         )}
       </div>
     </Link>
-  );
+  )
 }
 
 /* --- Small helpers for schedule labels --- */
 function labelForType(type) {
   switch (type) {
-    case 'booking':
-      return 'Resources';
-    case 'announcement':
-      return 'Announcements';
-    case 'maintenance':
-      return 'Maintenance';
+    case "booking":
+      return "Resources"
+    case "announcement":
+      return "Announcements"
+    case "maintenance":
+      return "Maintenance"
     default:
-      return 'Item';
+      return "Item"
   }
 }
 
 function badgeVariantForType(type) {
   switch (type) {
-    case 'booking':
-      return 'outline';
-    case 'announcement':
-      return 'secondary';
-    case 'maintenance':
-      return 'destructive';
+    case "booking":
+      return "outline"
+    case "announcement":
+      return "secondary"
+    case "maintenance":
+      return "destructive"
     default:
-      return 'secondary';
+      return "secondary"
   }
 }

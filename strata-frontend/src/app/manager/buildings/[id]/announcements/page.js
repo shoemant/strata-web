@@ -343,8 +343,7 @@ export default function AnnouncementsPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Announcements</h1>
+      <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={fetchAnnouncements} disabled={loading}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh

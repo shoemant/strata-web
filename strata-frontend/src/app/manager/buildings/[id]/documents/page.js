@@ -382,7 +382,7 @@ export default function DocumentsPage() {
 
   return (
     <div className="absolute inset-y-0 left-16 right-0 overflow-auto bg-background p-6 space-y-6">
-      <Card>
+      <Card className="mt-14">
         <CardHeader className="space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 text-sm">
@@ -465,11 +465,6 @@ export default function DocumentsPage() {
                 </Button>
               </div>
             </div>
-          </div>
-
-          <div>
-            <h1 className="text-3xl font-bold">Documents</h1>
-            <p className="text-sm text-muted-foreground">Browsing {currentPath || 'root'}</p>
           </div>
         </CardHeader>
 

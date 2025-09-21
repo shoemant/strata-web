@@ -95,40 +95,43 @@
   }
 
   .dark {
-    --background: 222.2 47.4% 11.2%;
-    --foreground: 210 40% 98%;
+    --background: 0 0% 6%;           /* #0F0F0F — deep background */
+    --foreground: 0 0% 96%;          /* #F5F5F5 — almost white text */
 
-    --card: 222.2 47.4% 11.2%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 10%;                /* #1A1A1A */
+    --card-foreground: 0 0% 92%;     /* #EAEAEA */
 
-    --popover: 222.2 47.4% 11.2%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 8%;              /* #141414 */
+    --popover-foreground: 0 0% 95%;  /* #F2F2F2 */
 
-    --primary: 204 94% 75%;               /* lighter sky for dark mode */
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 220 85% 65%;          /* Vibrant blue (#3B82F6) */
+    --primary-foreground: 0 0% 100%; /* White text on blue */
 
-    --secondary: 215 27.9% 16.9%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 0 0% 18%;           /* #2E2E2E */
+    --secondary-foreground: 0 0% 85%;/* #D9D9D9 */
 
-    --muted: 215 27.9% 16.9%;
-    --muted-foreground: 215 20.2% 65%;
+    --muted: 0 0% 14%;               /* #232323 */
+    --muted-foreground: 0 0% 65%;    /* #A6A6A6 */
 
-    --accent: 200 100% 20%;               /* deep sky */
-    --accent-foreground: 210 40% 98%;
+    --accent: 210 80% 60%;           /* Softer teal accent (#38BDF8) */
+    --accent-foreground: 0 0% 98%;   /* Nearly white */
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 72% 50%;        /* Bright red (#EF4444) */
+    --destructive-foreground: 0 0% 98%; /* White text on red */
 
-    --border: 215 27.9% 16.9%;
-    --input: 215 27.9% 16.9%;
-    --ring: 204 94% 75%;
+    --border: 0 0% 20%;              /* #333333 */
+    --input: 0 0% 18%;               /* #2E2E2E */
+    --ring: 220 85% 65%;             /* Matches primary blue */
 
-    --chart-1: 204 94% 75%;
-    --chart-2: 197 100% 70%;
-    --chart-3: 190 80% 65%;
-    --chart-4: 180 76% 68%;
-    --chart-5: 170 70% 60%;
+    --chart-1: 220 85% 65%;          /* Blue */
+    --chart-2: 160 65% 55%;          /* Green */
+    --chart-3: 45 100% 50%;          /* Yellow */
+    --chart-4: 280 70% 60%;          /* Purple */
+    --chart-5: 340 80% 60%;          /* Pink */
+
+    --radius: 0.75rem;
   }
+
 }
 
 
