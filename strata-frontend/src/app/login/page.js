@@ -101,9 +101,19 @@ export default function LoginFlowPage() {
       });
       const { exists, invite: inv, error: backendError } = await res.json();
       if (backendError) return setError(backendError);
-      setInvite(inv);
-      setEmail(trimmed);
-      goToStep(exists ? 'password' : 'signup');
+      setEmail(trimmed)
+      const hasInvite = Boolean(inv)
+      if (exists) {
+        setInvite(null)
+        return goToStep('password');
+      }
+      if (hasInvite) {
+        setInvite(inv);
+        return goToStep('signup');
+      }
+      // no account no invite -> block signup and show error
+      setInvite(null);
+      setError('Could not find an active account or invitation. If this is a mistake, please contact your building manager.');
     } catch {
       setError('Something went wrong. Please try again later.');
     } finally {
@@ -211,6 +221,7 @@ export default function LoginFlowPage() {
       setSignupMsg('');
       setSignupSending(false);
       setResendMsg({ ok: null, msg: '' });
+      setInvite(null);
     }
   };
 
@@ -382,9 +393,11 @@ export default function LoginFlowPage() {
                 // SIGNUP FORM (before sending)
                 <form onSubmit={handleSignupSubmit} className="space-y-6">
                   <h2 className="text-2xl font-bold text-text text-center">Create your account</h2>
-                  <p className="text-text text-center">
-                    You’ve been invited as a <strong>{invite || 'user'}</strong>
-                  </p>
+                  {invite ? (
+                    <p className="text-text text-center">
+                      You’ve been invited as a <strong>{invite}</strong>
+                    </p>
+                  ) : null}
                   <input
                     type="email"
                     value={email}
