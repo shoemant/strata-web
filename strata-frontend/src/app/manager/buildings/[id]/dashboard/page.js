@@ -56,7 +56,7 @@ export default function ManagerDashboard() {
   const [docs, setDocs] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const [calDate, setCalDate] = useState(new Date())
+  const [calDate, setCalDate] = useState(null)
 
   // bookings for schedule view
   const [bookings, setBookings] = useState([])
@@ -247,6 +247,26 @@ export default function ManagerDashboard() {
       })()
   }, [building, folder, supabase])
 
+  const calendar = useMemo(() => (
+    <div className="p-2 rounded-md bg-background">
+      <Calendar
+        mode="single"
+        selected={calDate ?? undefined}   // only highlight if user picked something
+        onSelect={(d) => setCalDate(d)}   // user’s selection
+        className="w-full border border-border/30 rounded-lg bg-card"
+        modifiers={{
+          today: new Date(), // custom style for today
+        }}
+        modifiersClassNames={{
+          today: "border border-primary text-primary font-semibold", // outline style only
+        }}
+      />
+
+    </div>
+  ), [calDate])
+
+
+
   const confirmRequest = async (id) => {
     const updated_at = new Date().toISOString()
     await supabase.from("maintenance_requests").update({ status: "completed", updated_at }).eq("id", id)
@@ -257,7 +277,9 @@ export default function ManagerDashboard() {
   const scheduleItems = useMemo(() => {
     if (!calDate) return []
 
+    if (!calDate) return []
     const dayStart = new Date(calDate)
+
     dayStart.setHours(0, 0, 0, 0)
     const dayEnd = new Date(calDate)
     dayEnd.setHours(23, 59, 59, 999)
@@ -287,9 +309,19 @@ export default function ManagerDashboard() {
     announcements.forEach((a) => {
       const ts = a.event_date || a.created_at
       if (ts && inDay(ts)) {
+        const d = new Date(ts)
+        const hasTime = d.getHours() + d.getMinutes() > 0
+        const dateStr = d.toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        })
+        const timeStr = hasTime
+          ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : ""
+
         items.push({
           id: `ann-${a.id}`,
-          when: a.event_date ? fmtHM(a.event_date) : fmtHM(a.created_at),
+          when: hasTime ? `${dateStr} ${timeStr}` : dateStr,
           title: `Announcement: ${a.title}`,
           type: "announcement",
           href: buildingHref("announcements"),
@@ -360,7 +392,7 @@ export default function ManagerDashboard() {
 
   return (
     <ProtectedRoute allowedRoles={["manager"]}>
-      <div className="absolute top-16 bottom-0 left-16 right-0 overflow-auto bg-background p-6">
+      <div className="absolute top-16 bottom-0 left-16 right-0 bg-background px-6">
 
         <div className="w-full max-w-none pt-2 space-y-6">
           <HeroWithAnnouncements
@@ -375,7 +407,6 @@ export default function ManagerDashboard() {
               title="Pending Requests"
               value={pending.length}
               icon={<AlertCircle className="h-5 w-5" />}
-              trend="+2 from yesterday"
               color="destructive"
             />
             <StatsCard
@@ -387,34 +418,30 @@ export default function ManagerDashboard() {
                 }).length
               }
               icon={<CheckCircle2 className="h-5 w-5" />}
-              trend="+5 from yesterday"
               color="primary"
             />
             <StatsCard
-              title="Active Resources"
+              title="Active Amenities"
               value={resources.length}
               icon={<Users className="h-5 w-5" />}
-              trend="All operational"
               color="secondary"
             />
             <StatsCard
               title="Upcoming Events"
               value={scheduleItems.length}
               icon={<Clock className="h-5 w-5" />}
-              trend="Next 7 days"
               color="secondary"
             />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left side: occupies 2/3 width */}
             <div className="lg:col-span-2 space-y-8">
               <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                   <div className="flex items-center space-x-2">
                     <Users className="h-5 w-5 text-primary" />
                     <Link href={buildingHref("resources")} className="hover:underline">
-                      <CardTitle className="text-xl">Amenities & Resources</CardTitle>
+                      <CardTitle className="text-xl">Amenities</CardTitle>
                     </Link>
                   </div>
                   <Link href={buildingHref("resources")}>
@@ -423,11 +450,12 @@ export default function ManagerDashboard() {
                     </Button>
                   </Link>
                 </CardHeader>
+
                 <CardContent className="space-y-4">
                   {resources.length > 0 ? (
                     <div className="grid gap-4">
                       {resources.slice(0, 3).map((r) => (
-                        <Card key={r.id} className="bg-muted/30 border-border/30 hover:bg-muted/50 transition-colors">
+                        <Card key={r.id} className="bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors">
                           <CardContent className="flex justify-between items-center p-4">
                             <div className="space-y-1">
                               <h3 className="font-medium text-foreground">{r.name}</h3>
@@ -458,20 +486,81 @@ export default function ManagerDashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                  <div className="flex items-center space-x-2">
-                    <FileText className="h-5 w-5 text-primary" />
-                    <CardTitle className="text-xl">Documents</CardTitle>
-                  </div>
-                  <Link href={buildingHref("documents")}>
-                    <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
-                      View all <ArrowUpRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </Link>
-                </CardHeader>
-                <FolderExplorerCard buildingId={building?.id} allDocsHref={buildingHref("documents")} />
-              </Card>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <div className="flex items-center space-x-2">
+                      <FileText className="h-5 w-5 text-primary" />
+                      <Link href={buildingHref("announcements")} className="hover:underline">
+                        <CardTitle className="text-xl">Announcements</CardTitle>
+                      </Link>
+                    </div>
+                    <Link href={buildingHref("announcements")}>
+                      <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
+                        View all <ArrowUpRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </Link>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {announcements.length > 0 ? (
+                      <div className="space-y-3">
+                        {announcements.slice(0, 3).map((a) => (
+                          <Card
+                            key={a.id}
+                            className="bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors"
+                          >
+                            <CardContent className="p-4 space-y-2">
+                              <div className="flex justify-between items-start">
+                                <h3 className="font-medium text-foreground line-clamp-1">{a.title}</h3>
+                                {a.event_date && (
+                                  <Badge variant="secondary" className="shrink-0">
+                                    {new Date(a.event_date).toLocaleDateString(undefined, {
+                                      month: "short",
+                                      day: "numeric",
+                                    })}
+                                  </Badge>
+                                )}
+                              </div>
+                              {a.subtitle && (
+                                <p className="text-sm text-muted-foreground line-clamp-2">{a.subtitle}</p>
+                              )}
+                              {!a.subtitle && a.message && (
+                                <p className="text-sm text-muted-foreground line-clamp-2">{a.message}</p>
+                              )}
+                              <Link
+                                href={buildingHref("announcements")}
+                                className="text-xs text-primary hover:text-primary/80 inline-flex items-center"
+                              >
+                                Read more <ArrowUpRight className="h-3 w-3 ml-1" />
+                              </Link>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <FileText className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                        <p className="text-muted-foreground">No announcements yet.</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <div className="flex items-center space-x-2">
+                      <FileText className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-xl">Documents</CardTitle>
+                    </div>
+                    <Link href={buildingHref("documents")}>
+                      <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
+                        View all <ArrowUpRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </Link>
+                  </CardHeader>
+                  <FolderExplorerCard buildingId={building?.id} allDocsHref={buildingHref("documents")} />
+                </Card>
+              </div>
             </div>
 
             {/* Right side: occupies 1/3 width */}
@@ -608,22 +697,22 @@ export default function ManagerDashboard() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <Calendar
-                    mode="single"
-                    selected={calDate}
-                    onSelect={(d) => d && setCalDate(d)}
-                    className="w-full border-border/30 bg-muted/20 rounded-lg"
-                  />
+                  {calendar}
                   <Separator className="bg-border/50" />
                   <div>
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-medium text-foreground">
-                        {calDate.toLocaleDateString(undefined, {
-                          weekday: "long",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </h3>
+                      {calDate ? (
+                        <h3 className="font-medium text-foreground">
+                          {calDate.toLocaleDateString(undefined, {
+                            weekday: "long",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </h3>
+                      ) : (
+                        <h3 className="font-medium text-muted-foreground italic">No date selected</h3>
+                      )}
+
                       <Badge variant="secondary" className="bg-secondary/50 text-secondary-foreground">
                         {scheduleItems.length} items
                       </Badge>
@@ -634,7 +723,7 @@ export default function ManagerDashboard() {
                           {scheduleItems.map((ev) => (
                             <div
                               key={ev.id}
-                              className="flex items-start gap-3 p-3 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors"
+                              className="flex items-start gap-3 p-3 rounded-lg bg-muted/20 hover:bg-[hsl(var(--hover))] transition-colors"
                             >
                               <span className="text-xs font-mono mt-1 shrink-0 w-16 text-muted-foreground bg-background/50 px-2 py-1 rounded">
                                 {ev.when || "--:--"}
@@ -681,14 +770,16 @@ function StatsCard({ title, value, icon, trend, color = "secondary" }) {
   }
 
   return (
-    <div className="seamless-section rounded-2xl p-6 hover:scale-[1.02] transition-all">
+    <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-6 hover:shadow-md transition-all">
       <div className="flex items-center justify-between">
         <div className="space-y-2">
           <p className="text-sm font-medium text-muted-foreground">{title}</p>
           <p className="text-3xl font-bold text-foreground">{value}</p>
           <p className="text-xs text-muted-foreground">{trend}</p>
         </div>
-        <div className={`p-3 rounded-full ${colorClasses[color]}`}>{icon}</div>
+        <div className={`p-3 rounded-full ${colorClasses[color]}`}>
+          {icon}
+        </div>
       </div>
     </div>
   )
@@ -742,7 +833,7 @@ function BuildingHero({ name, imageUrl, children }) {
         <div className="absolute top-6 left-0 right-0 flex justify-center">
           <h1
             className={[
-              "text-5xl md:text-7xl font-bold uppercase tracking-widest drop-shadow-lg",
+              "text-5xl md:text-8xl font-bold uppercase tracking-widest drop-shadow-lg",
               hasImage ? "text-white" : "gradient-text",
             ].join(" ")}
           >
@@ -844,7 +935,11 @@ function AnnouncementsDeck({ items, href }) {
             {subtitle && (
               <div className="text-base md:text-lg opacity-90 line-clamp-3 text-pretty max-w-2xl">{subtitle}</div>
             )}
-            {formattedDate && <div className="text-sm md:text-base opacity-80 mt-3 font-medium">{formattedDate}</div>}
+            {formattedDate && (
+              <div className="inline-flex items-center px-4 py-2 mt-4 rounded-lg bg-primary text-primary-foreground text-base md:text-lg font-semibold shadow hover:bg-primary/90 transition-colors">
+                {formattedDate}
+              </div>
+            )}
           </div>
 
           {/* Controls */}

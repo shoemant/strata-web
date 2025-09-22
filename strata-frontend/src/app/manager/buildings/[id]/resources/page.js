@@ -135,9 +135,6 @@ export default function ManagerResourcesPage() {
     return (
         <main className="p-6 space-y-6">
             {/* Header + CTAs */}
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-semibold">Manage Amenities</h1>
-            </div>
 
             <div>
                 <Button asChild>

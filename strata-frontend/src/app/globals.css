@@ -32,17 +32,6 @@ html, body {
   overflow: hidden;
 }
 
-/* Full-bleed utility: makes a child span the entire viewport width */
-.full-bleed {
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
-}
-
-/* Optional: if any stray 'container' sneaks in, neuter it in manager area only */
-.manager-shell .container {
-  max-width: 100% !important;
-}
 
 
 
