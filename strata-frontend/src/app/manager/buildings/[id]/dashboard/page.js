@@ -28,7 +28,6 @@ import {
   ArrowUpRight,
 } from "lucide-react"
 import FolderExplorerCard from "@/components/FolderExplorerCard"
-import ProfileDropdown from "@/components/ProfileDropdown" // Assuming ProfileDropdown is a new component
 
 /* ---------- tiny color helpers ---------- */
 function percentToHex(p) {
@@ -785,17 +784,38 @@ function StatsCard({ title, value, icon, trend, color = "secondary" }) {
   )
 }
 
-/* =================== Hero with announcements inside the hero =================== */
+/* =================== Hero with announcements replacing building image =================== */
 function HeroWithAnnouncements({ name, imageUrl, announcements, announcementsHref }) {
-  const hasDeck = (announcements?.length ?? 0) > 0
+  const hasAnnouncements = (announcements?.length ?? 0) > 0
+
   return (
-    <section className={["relative z-10", hasDeck ? "mb-[13rem] md:mb-[10rem] lg:mb-[13rem]" : ""].join(" ")}>
-      <BuildingHero name={name} imageUrl={imageUrl}>
+    <section className="relative z-10">
+      {hasAnnouncements ? (
+        // --- When announcements exist: ONLY show announcements banner ---
         <AnnouncementsDeck items={announcements} href={announcementsHref} />
-      </BuildingHero>
+      ) : (
+        // --- When NO announcements: Show building image and name like before ---
+        <BuildingHero name={name} imageUrl={imageUrl}>
+          {/* We keep announcements deck here commented out for easy reversal */}
+          {/* <AnnouncementsDeck items={announcements} href={announcementsHref} /> */}
+        </BuildingHero>
+      )}
     </section>
   )
 }
+
+// --- Original code, kept for easy reversion ---
+/*
+const hasDeck = (announcements?.length ?? 0) > 0
+return (
+  <section className={["relative z-10", hasDeck ? "mb-[13rem] md:mb-[10rem] lg:mb-[13rem]" : ""].join(" ")}>
+    <BuildingHero name={name} imageUrl={imageUrl}>
+      <AnnouncementsDeck items={announcements} href={announcementsHref} />
+    </BuildingHero>
+  </section>
+)
+*/
+
 
 /* Enhanced building hero with modern gradient and glass effects */
 function BuildingHero({ name, imageUrl, children }) {
