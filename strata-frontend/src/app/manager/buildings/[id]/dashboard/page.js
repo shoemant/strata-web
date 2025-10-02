@@ -786,20 +786,21 @@ function StatsCard({ title, value, icon, trend, color = "secondary" }) {
 
 /* =================== Hero with announcements replacing building image =================== */
 function HeroWithAnnouncements({ name, imageUrl, announcements, announcementsHref }) {
-  const hasAnnouncements = (announcements?.length ?? 0) > 0
+  // Always include building hero as the first "announcement"
+  const deckItems = [
+    ...(announcements || []),
+    {
+      id: "building-hero",
+      image_url: imageUrl || null,
+      subtitle: null,
+      message: null,
+      isBuilding: true, // flag to render differently
+    },
+  ]
 
   return (
     <section className="relative z-10">
-      {hasAnnouncements ? (
-        // --- When announcements exist: ONLY show announcements banner ---
-        <AnnouncementsDeck items={announcements} href={announcementsHref} />
-      ) : (
-        // --- When NO announcements: Show building image and name like before ---
-        <BuildingHero name={name} imageUrl={imageUrl}>
-          {/* We keep announcements deck here commented out for easy reversal */}
-          {/* <AnnouncementsDeck items={announcements} href={announcementsHref} /> */}
-        </BuildingHero>
-      )}
+      <AnnouncementsDeck items={deckItems} href={announcementsHref} />
     </section>
   )
 }
@@ -822,12 +823,16 @@ function BuildingHero({ name, imageUrl, children }) {
   const hasImage = Boolean(imageUrl)
   const hasDeck = Boolean(children)
 
-  // Taller hero when we have the announcement deck
-  const heightClass = hasImage ? (hasDeck ? "h-80 md:h-96" : "h-48 md:h-64") : hasDeck ? "h-64 md:h-72" : "h-40 md:h-48"
+  const heightClass = hasImage
+    ? hasDeck
+      ? "h-80 md:h-96"
+      : "h-48 md:h-64"
+    : hasDeck
+      ? "h-64 md:h-72"
+      : "h-40 md:h-48"
 
   return (
     <div className="relative">
-      {/* Hero image box (this one clips its own contents) */}
       <div
         className={[
           "relative rounded-2xl overflow-hidden border border-border/20",
@@ -844,12 +849,14 @@ function BuildingHero({ name, imageUrl, children }) {
             : undefined
         }
       >
-        {hasImage && <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60" />}
+        {hasImage && (
+          <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60" />
+        )}
         {!hasImage && (
           <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-transparent to-primary/20" />
         )}
 
-        {/* Name centered at the top */}
+        {/* Building name always centered */}
         <div className="absolute top-6 left-0 right-0 flex justify-center">
           <h1
             className={[
@@ -868,19 +875,19 @@ function BuildingHero({ name, imageUrl, children }) {
         </div>
       </div>
 
-      {/* HANGING BANNER: positioned outside the clipped box, layered above cards */}
-      <div className="absolute left-1/2 top-[100%] -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl px-3 sm:px-4 z-30">
-        {children}
-      </div>
+      {/* Hanging banner for announcements if present */}
+      {hasDeck && (
+        <div className="absolute left-1/2 top-[100%] -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl px-3 sm:px-4 z-30">
+          {children}
+        </div>
+      )}
     </div>
   )
 }
 
-/* Enhanced announcements deck with modern glass effect */
 function AnnouncementsDeck({ items, href }) {
   const [index, setIndex] = useState(0)
 
-  // Auto-rotate every 6s if multiple items
   useEffect(() => {
     if (!items || items.length <= 1) return
     const id = setInterval(() => {
@@ -892,9 +899,45 @@ function AnnouncementsDeck({ items, href }) {
   if (!items || items.length === 0) return null
 
   const active = items[index]
-  const hasImg = Boolean(active?.image_url)
 
-  // Prefer event_date for the small date line
+  // If this is the building hero slide
+  if (active.isBuilding) {
+    return (
+      <div className="relative rounded-2xl overflow-hidden border border-border/20">
+        {active.image_url ? (
+          <>
+            <img
+              src={active.image_url}
+              alt={active.title || "Building image"}
+              className="w-full h-auto object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60" />
+          </>
+        ) : (
+          <div className="h-[24rem] bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
+            <h1 className="text-5xl md:text-7xl font-bold uppercase tracking-widest text-white drop-shadow-lg">
+              {active.title}
+            </h1>
+          </div>
+        )}
+
+        {/* Overlayed building name */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <h1 className="text-5xl md:text-7xl font-bold uppercase tracking-widest text-white drop-shadow-lg">
+            {active.title}
+          </h1>
+        </div>
+
+        {items.length > 1 && (
+          <DeckControls items={items} index={index} setIndex={setIndex} />
+        )}
+      </div>
+    )
+  }
+
+
+  // --- Normal announcement slide ---
+  const hasImg = Boolean(active?.image_url)
   const formattedDate = active?.event_date
     ? new Date(active.event_date).toLocaleDateString(undefined, {
       weekday: "long",
@@ -903,116 +946,92 @@ function AnnouncementsDeck({ items, href }) {
     })
     : null
 
-  // DB-provided styles with sensible fallbacks
-  const fontColor = active?.text_color || (hasImg ? "#ffffff" : undefined)
-  const solidBg = !hasImg && (active?.banner_bg_color || undefined)
-  const overlayRGBA =
-    hasImg && active?.overlay_color && typeof active?.overlay_opacity === "number"
-      ? hexWithAlpha(active.overlay_color, Math.max(0, Math.min(100, active.overlay_opacity)))
-      : hasImg
-        ? "rgba(0,0,0,0.45)"
-        : undefined
-
-  const subtitle =
-    active?.subtitle ??
-    (active?.message ? (active.message.length > 140 ? active.message.slice(0, 137) + "…" : active.message) : "")
-
   return (
     <Link href={href} className="block group">
       <div
         className={[
-          "relative rounded-2xl shadow-2xl ring-1 ring-white/10 border border-border/20 overflow-hidden backdrop-blur-sm",
-          "hover:shadow-3xl hover:ring-white/20 transition-all duration-300 group-hover:scale-[1.02]",
-          !hasImg && !solidBg ? "glass-effect" : "",
-          // BIG banner
-          "h-[18rem] md:h-[20rem] lg:h-[22rem]",
+          "relative rounded-2xl overflow-hidden border border-border/20 h-[24rem] md:h-[28rem] lg-h-[32rem]",
+          "shadow-2xl ring-1 ring-white/10 backdrop-blur-sm hover:shadow-3xl hover:ring-white/20 transition-all duration-300 group-hover:scale-[1.02]",
         ].join(" ")}
         style={
           hasImg
             ? { backgroundImage: `url(${active.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }
-            : solidBg
-              ? { backgroundColor: solidBg }
-              : undefined
+            : { background: active.banner_bg_color || "linear-gradient(to bottom right, #4f46e5, #6366f1)" }
         }
       >
-        {/* Overlay when image present (from DB or default) */}
-        {hasImg && (
-          <div
-            className="absolute inset-0 bg-gradient-to-br from-black/60 via-transparent to-black/40"
-            style={{ backgroundColor: overlayRGBA }}
-          />
-        )}
-        {!hasImg && !solidBg && (
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-primary/10" />
-        )}
-
+        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-transparent to-black/40" />
         <div className="relative h-full w-full px-6 md:px-8 flex items-center justify-between">
-          <div style={{ color: fontColor || (hasImg ? "#ffffff" : undefined) }} className="space-y-2">
+          <div className="space-y-2 text-white">
             <div className="text-xs md:text-sm uppercase opacity-80 tracking-wider font-medium">Announcement</div>
-            <div className="text-3xl md:text-4xl font-bold leading-tight line-clamp-2 text-balance">
-              {active?.title}
-            </div>
-            {subtitle && (
-              <div className="text-base md:text-lg opacity-90 line-clamp-3 text-pretty max-w-2xl">{subtitle}</div>
-            )}
+            <div className="text-3xl md:text-4xl font-bold leading-tight line-clamp-2">{active.title}</div>
+            {active.subtitle && <div className="text-base md:text-lg opacity-90 line-clamp-3">{active.subtitle}</div>}
             {formattedDate && (
-              <div className="inline-flex items-center px-4 py-2 mt-4 rounded-lg bg-primary text-primary-foreground text-base md:text-lg font-semibold shadow hover:bg-primary/90 transition-colors">
+              <div className="inline-flex items-center px-4 py-2 mt-4 rounded-lg bg-primary text-primary-foreground text-base md:text-lg font-semibold shadow">
                 {formattedDate}
               </div>
             )}
           </div>
 
-          {/* Controls */}
-          {items.length > 1 && (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                aria-label="Previous"
-                onClick={(e) => {
-                  e.preventDefault()
-                  setIndex((i) => (i - 1 + items.length) % items.length)
-                }}
-                className="inline-flex items-center justify-center h-10 w-10 rounded-full glass-effect hover:bg-white/20 transition-colors"
-              >
-                <ChevronLeft className="h-5 w-5 text-white" />
-              </button>
-              <button
-                type="button"
-                aria-label="Next"
-                onClick={(e) => {
-                  e.preventDefault()
-                  setIndex((i) => (i + 1) % items.length)
-                }}
-                className="inline-flex items-center justify-center h-10 w-10 rounded-full glass-effect hover:bg-white/20 transition-colors"
-              >
-                <ChevronRight className="h-5 w-5 text-white" />
-              </button>
-            </div>
-          )}
+          {items.length > 1 && <DeckControls items={items} index={index} setIndex={setIndex} />}
         </div>
 
-        {/* Dots */}
         {items.length > 1 && (
-          <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-2">
-            {items.map((_, i) => (
-              <button
-                key={i}
-                onClick={(e) => {
-                  e.preventDefault()
-                  setIndex(i)
-                }}
-                className={[
-                  "h-2 rounded-full transition-all duration-300",
-                  i === index ? "w-8 bg-white" : "w-2 bg-white/60 hover:bg-white/80",
-                ].join(" ")}
-              />
-            ))}
-          </div>
+          <DeckDots items={items} index={index} setIndex={setIndex} />
         )}
       </div>
     </Link>
   )
 }
+
+function DeckControls({ items, index, setIndex }) {
+  return (
+    <div className="flex items-center gap-3 absolute right-4 bottom-4">
+      <button
+        type="button"
+        aria-label="Previous"
+        onClick={(e) => {
+          e.preventDefault()
+          setIndex((i) => (i - 1 + items.length) % items.length)
+        }}
+        className="inline-flex items-center justify-center h-10 w-10 rounded-full glass-effect hover:bg-white/20 transition-colors"
+      >
+        <ChevronLeft className="h-5 w-5 text-white" />
+      </button>
+      <button
+        type="button"
+        aria-label="Next"
+        onClick={(e) => {
+          e.preventDefault()
+          setIndex((i) => (i + 1) % items.length)
+        }}
+        className="inline-flex items-center justify-center h-10 w-10 rounded-full glass-effect hover:bg-white/20 transition-colors"
+      >
+        <ChevronRight className="h-5 w-5 text-white" />
+      </button>
+    </div>
+  )
+}
+
+function DeckDots({ items, index, setIndex }) {
+  return (
+    <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-2">
+      {items.map((_, i) => (
+        <button
+          key={i}
+          onClick={(e) => {
+            e.preventDefault()
+            setIndex(i)
+          }}
+          className={[
+            "h-2 rounded-full transition-all duration-300",
+            i === index ? "w-8 bg-white" : "w-2 bg-white/60 hover:bg-white/80",
+          ].join(" ")}
+        />
+      ))}
+    </div>
+  )
+}
+
 
 /* --- Small helpers for schedule labels --- */
 function labelForType(type) {
