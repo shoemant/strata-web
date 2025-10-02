@@ -903,25 +903,19 @@ function AnnouncementsDeck({ items, href }) {
   // If this is the building hero slide
   if (active.isBuilding) {
     return (
-      <div className="relative rounded-2xl overflow-hidden border border-border/20">
-        {active.image_url ? (
-          <>
-            <img
-              src={active.image_url}
-              alt={active.title || "Building image"}
-              className="w-full h-auto object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60" />
-          </>
-        ) : (
-          <div className="h-[24rem] bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
-            <h1 className="text-5xl md:text-7xl font-bold uppercase tracking-widest text-white drop-shadow-lg">
-              {active.title}
-            </h1>
-          </div>
-        )}
-
-        {/* Overlayed building name */}
+      <div
+        className="relative rounded-2xl overflow-hidden border border-border/20 h-[24rem] md:h-[28rem] lg-h-[32rem]"
+        style={
+          active.image_url
+            ? {
+              backgroundImage: `url(${active.image_url})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }
+            : { background: "linear-gradient(to bottom right, #4f46e5, #6366f1)" }
+        }
+      >
+        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60" />
         <div className="absolute inset-0 flex items-center justify-center">
           <h1 className="text-5xl md:text-7xl font-bold uppercase tracking-widest text-white drop-shadow-lg">
             {active.title}
@@ -934,7 +928,6 @@ function AnnouncementsDeck({ items, href }) {
       </div>
     )
   }
-
 
   // --- Normal announcement slide ---
   const hasImg = Boolean(active?.image_url)

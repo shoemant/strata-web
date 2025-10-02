@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import Image from "next/image";
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import { useParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -16,6 +17,14 @@ import {
   ChevronLeft,
   Home,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu"
+
+import { RenameDialog } from '@/components/documents/RenameDialog';
 
 export default function DocumentsPage() {
   const supabase = useSupabaseClient();
@@ -31,6 +40,8 @@ export default function DocumentsPage() {
   const [docs, setDocs] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const [renameDialog, setRenameDialog] = useState({ open: false, doc: null })
 
   // dropzone UI state
   const [dragActive, setDragActive] = useState(false);
@@ -67,32 +78,10 @@ export default function DocumentsPage() {
   // Load immediate subfolders of currentPath
   useEffect(() => {
     if (!buildingId || !isAuthed) return;
-    (async () => {
-      const likePattern = currentPath ? `${currentPath}/%` : '%';
-      const { data, error } = await supabase
-        .from('documents')
-        .select('folder')
-        .eq('building_id', buildingId)
-        .like('folder', likePattern);
-
-      if (error) {
-        console.error('Error loading folder list:', error);
-        setChildFolders([]);
-        return;
-      }
-
-      const immediate = new Set();
-      for (const row of data || []) {
-        const f = row.folder || ''; // ignore NULL
-        if (!f || !f.startsWith(prefix)) continue;
-        const remainder = f.slice(prefix.length);
-        if (!remainder) continue;
-        const firstSeg = remainder.split('/')[0];
-        if (firstSeg) immediate.add(firstSeg);
-      }
-      setChildFolders(Array.from(immediate).sort((a, b) => a.localeCompare(b)));
-    })();
+    refreshFolders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildingId, isAuthed, supabase, prefix, currentPath]);
+
 
   // Load files for currentPath
   async function refreshFiles() {
@@ -118,6 +107,141 @@ export default function DocumentsPage() {
     }
     setDocs(data || []);
   }
+
+  async function handleRenameFile(doc) {
+    const newTitle = prompt("Enter new file name:", doc.title);
+    if (!newTitle || newTitle === doc.title) return;
+
+    // Just change the title, keep url/path the same
+    const { error } = await supabase
+      .from("documents")
+      .update({ title: newTitle })
+      .eq("id", doc.id);
+
+    if (error) {
+      console.error("DB rename error:", error);
+      alert("Failed to rename file in DB.");
+    } else {
+      await refreshFiles();
+    }
+  }
+
+  async function refreshFolders() {
+    const pref = currentPath ? `${currentPath}/` : '';
+    const likePattern = `${pref}%`;
+
+    const { data, error } = await supabase
+      .from('documents')
+      .select('id, folder, title, is_folder')
+      .eq('building_id', buildingId)
+      .eq('is_folder', true)
+      .like('folder', likePattern);
+
+    if (error) {
+      console.error('Error loading folder list:', error);
+      setChildFolders([]);
+      return;
+    }
+
+    const rows = data || [];
+
+    // Heuristic: if we see ANY folder with folder === currentPath, assume Mode A (parent-path model)
+    const looksLikeParentModel = rows.some(r => (r.folder || '') === (currentPath || ''));
+
+    let items = [];
+
+    if (looksLikeParentModel) {
+      // MODE A: parent-path model -> immediate children are rows with folder === currentPath
+      const immediate = rows.filter(r => (r.folder || '') === (currentPath || ''));
+      items = immediate
+        .map(r => ({ segment: r.title, title: r.title }))
+        .sort((a, b) => a.title.localeCompare(b.title));
+    } else {
+      // MODE B: self-path model -> immediate children are rows with folder starting with `${pref}`
+      // where the remainder has no '/'
+      const immediateSegs = new Set();
+      rows.forEach((row) => {
+        const f = row.folder || '';
+        if (!f.startsWith(pref)) return;
+        const remainder = f.slice(pref.length);
+        if (!remainder || remainder.includes('/')) return; // only immediate
+        immediateSegs.add(remainder);
+      });
+
+      const titleBySeg = new Map();
+      immediateSegs.forEach((seg) => {
+        const exact = rows.find((r) => r.folder === `${pref}${seg}`);
+        titleBySeg.set(seg, (exact && exact.title) || seg);
+      });
+
+      items = Array.from(titleBySeg.entries())
+        .map(([segment, title]) => ({ segment, title }))
+        .sort((a, b) => a.title.localeCompare(b.title));
+    }
+
+    setChildFolders(items);
+  }
+
+
+  // Change signature to accept (oldName, newName)
+  async function handleRenameFolder(oldName, newName) {
+    if (!newName || newName === oldName) return;
+
+    const isRoot = !currentPath;
+    const oldPath = isRoot ? oldName : `${currentPath}/${oldName}`;
+    const newPath = isRoot ? newName : `${currentPath}/${newName}`;
+
+    // lookup row
+    const { data: foundB } = await supabase
+      .from("documents")
+      .select("id, folder, title")
+      .eq("building_id", buildingId)
+      .eq("is_folder", true)
+      .eq("folder", oldPath)
+      .limit(1);
+
+    let folderRow = (foundB && foundB[0]) || null;
+
+    if (!folderRow) {
+      const { data: foundA } = await supabase
+        .from("documents")
+        .select("id, folder, title")
+        .eq("building_id", buildingId)
+        .eq("is_folder", true)
+        .eq("folder", currentPath || "")
+        .eq("title", oldName)
+        .limit(1);
+
+      folderRow = (foundA && foundA[0]) || null;
+    }
+
+    if (!folderRow) {
+      alert("Could not find folder row to rename.");
+      return;
+    }
+
+    const isModeA = (folderRow.folder || "") === (currentPath || "");
+    const folderUpdate = isModeA
+      ? { title: newName }
+      : { title: newName, folder: newPath };
+
+    await supabase.from("documents").update(folderUpdate).eq("id", folderRow.id);
+
+    // update descendants
+    const { data: descendants } = await supabase
+      .from("documents")
+      .select("id, folder")
+      .eq("building_id", buildingId)
+      .like("folder", `${oldPath}/%`);
+
+    for (const row of descendants || []) {
+      const updatedFolder = row.folder.replace(oldPath, newPath);
+      await supabase.from("documents").update({ folder: updatedFolder }).eq("id", row.id);
+    }
+
+    await Promise.all([refreshFolders(), refreshFiles()]);
+  }
+
 
   useEffect(() => {
     if (!buildingId || !isAuthed) return;
@@ -150,22 +274,32 @@ export default function DocumentsPage() {
       const { error } = await supabase.from('documents').insert({
         building_id: buildingId,
         uploaded_by: session?.user?.id || null,
-        folder: newPath,
-        title: segment,
+        folder: newPath,     // <-- this is Mode B (self-path)
+        title: segment,      // display name
         is_folder: true,
         url: null,
         path: null,
       });
+
       if (error) {
         console.error('Error creating folder:', error.message);
         return;
       }
     }
 
-    setChildFolders((prev) =>
-      Array.from(new Set([...prev, segment])).sort((a, b) => a.localeCompare(b))
-    );
+    setChildFolders((prev) => {
+      const segment = newPath.split('/').pop();
+      const title = segment; // display name equals segment by default
+      const next = [...prev];
+
+      // avoid duplicates by segment
+      if (!next.some((f) => f.segment === segment)) {
+        next.push({ segment, title });
+      }
+      return next.sort((a, b) => a.title.localeCompare(b.title));
+    });
     setNewFolder('');
+
   }
 
   // === Upload helpers (button + dropzone both use these) ===
@@ -196,7 +330,6 @@ export default function DocumentsPage() {
       uploaded_by: session?.user?.id || null,
       title: file.name,
       url: urlData.publicUrl,
-      created_at: getCurrentTimestamp(),
       building_id: buildingId,
       folder: currentPath,
       path: storageKey,
@@ -304,7 +437,9 @@ export default function DocumentsPage() {
       setDocs([]);
     } else {
       const seg = targetPath.slice(prefix.length).split('/')[0];
-      if (seg) setChildFolders((prev) => prev.filter((n) => n !== seg));
+      if (seg) setChildFolders((prev) => prev.filter((f) => (typeof f === 'string' ? f !== seg : f.segment !== seg)));
+
+
     }
   }
 
@@ -385,6 +520,7 @@ export default function DocumentsPage() {
       <Card className="mt-14">
         <CardHeader className="space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            {/* Breadcrumbs */}
             <div className="flex items-center gap-2 text-sm">
               <Button
                 size="icon"
@@ -392,18 +528,18 @@ export default function DocumentsPage() {
                 aria-label="Go up"
                 onClick={() => {
                   if (!currentPath) return;
-                  const parts = currentPath.split('/').filter(Boolean);
+                  const parts = currentPath.split("/").filter(Boolean);
                   parts.pop();
-                  setCurrentPath(parts.join('/'));
+                  setCurrentPath(parts.join("/"));
                 }}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
 
               <Button
-                variant={currentPath === '' ? 'secondary' : 'ghost'}
+                variant={currentPath === "" ? "secondary" : "ghost"}
                 size="sm"
-                onClick={() => setCurrentPath('')}
+                onClick={() => setCurrentPath("")}
               >
                 <Home className="h-4 w-4 mr-1" /> root
               </Button>
@@ -412,7 +548,7 @@ export default function DocumentsPage() {
                 <React.Fragment key={`${seg}-${i}`}>
                   <ChevronRight className="h-4 w-4" />
                   <Button
-                    variant={i === crumbs.length - 1 ? 'secondary' : 'ghost'}
+                    variant={i === crumbs.length - 1 ? "secondary" : "ghost"}
                     size="sm"
                     onClick={() => goToCrumb(i)}
                   >
@@ -420,26 +556,13 @@ export default function DocumentsPage() {
                   </Button>
                 </React.Fragment>
               ))}
-
-              {currentPath && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="ml-2"
-                  onClick={handleDeleteCurrentFolder}
-                  disabled={deleting}
-                  title="Delete this folder and everything inside it"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  {deleting ? 'Deleting…' : 'Delete this folder'}
-                </Button>
-              )}
             </div>
 
+            {/* Folder creation + upload */}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <form onSubmit={handleCreateFolder} className="flex gap-2">
                 <Input
-                  placeholder={`New folder in ${currentPath || 'root'}`}
+                  placeholder={`New folder in ${currentPath || "root"}`}
                   value={newFolder}
                   onChange={(e) => setNewFolder(e.target.value)}
                   className="w-56"
@@ -456,12 +579,12 @@ export default function DocumentsPage() {
                   onClick={handleUpload}
                   disabled={!canUpload || uploading}
                   className="inline-flex items-center"
-                  title={`Upload to ${currentPath || 'root'}`}
+                  title={`Upload to ${currentPath || "root"}`}
                 >
                   <UploadCloud className="mr-2 h-4 w-4" />
                   {uploading
                     ? `Uploading ${uploadCount.done}/${uploadCount.total}…`
-                    : 'Upload'}
+                    : "Upload"}
                 </Button>
               </div>
             </div>
@@ -487,36 +610,51 @@ export default function DocumentsPage() {
             {/* Scrollable content */}
             <ScrollArea className="h-[540px]">
               <div className="divide-y">
-                {childFolders?.length > 0 &&
-                  childFolders.map((name) => (
-                    <div
-                      key={`folder-${name}`}
-                      className="grid grid-cols-[24px_1fr_auto] items-center px-3 py-2 hover:bg-muted/40"
-                    >
+                {/* Child folders */}
+                {childFolders?.length > 0 && childFolders.map((f) => {
+                  const segment = typeof f === 'string' ? f : f.segment;
+                  const title = typeof f === 'string' ? f : f.title;
+                  return (
+                    <div key={`folder-${segment}`} className="grid grid-cols-[24px_1fr_auto] items-center px-3 py-2 hover:bg-muted/40">
                       <div className="flex items-center justify-center">
                         <FolderPlus className="h-4 w-4" />
                       </div>
-                      <button
-                        className="text-left hover:text-primary"
-                        onClick={() => openChild(name)}
-                        title={`Open ${name}`}
-                      >
-                        {name}
+                      <button className="text-left hover:text-primary" onClick={() => openChild(segment)} title={`Open ${title}`}>
+                        {title}
                       </button>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title={`Delete folder ${name}`}
-                          onClick={() => handleDeleteChildFolder(name)}
-                          disabled={deleting}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <ChevronRight className="h-4 w-4 rotate-90" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuItem
+                            onClick={() => setRenameDialog({
+                              open: true,
+                              doc: { id: segment, title }  // mock structure for folders
+                            })}
+                          >
+                            <Image
+                              src="/images/icons/rename.png"
+                              alt="Rename"
+                              width={16}
+                              height={16}
+                              className="mr-2"
+                            />
+                            Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDeleteChildFolder(segment)} className="text-destructive">
+                            <Trash2 className="h-4 w-4 mr-2" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                  ))}
+                  );
+                })}
 
+
+                {/* Files */}
                 {docs?.length > 0 &&
                   docs.map((doc) => (
                     <div
@@ -535,19 +673,40 @@ export default function DocumentsPage() {
                       >
                         {doc.title}
                       </a>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title={`Delete file ${doc.title}`}
-                          onClick={() => handleDelete(doc)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+
+                      {/* 3-dot dropdown for files */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <ChevronRight className="h-4 w-4 rotate-90" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuItem
+                            onClick={() => setRenameDialog({ open: true, doc })}
+                          >
+                            <Image
+                              src="/images/icons/rename.png"
+                              alt="Rename"
+                              width={16}
+                              height={16}
+                              className="mr-2"
+                            />
+                            Rename
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            onClick={() => handleDelete(doc)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   ))}
 
+                {/* Empty state */}
                 {!childFolders?.length && !docs?.length && (
                   <div className="px-3 py-10 text-sm text-muted-foreground text-center">
                     This folder is empty. Create a subfolder or upload files.
@@ -559,17 +718,17 @@ export default function DocumentsPage() {
             {/* Invisible overlay that shows ONLY during drag */}
             <div
               className={[
-                'absolute inset-0 rounded-md transition',
+                "absolute inset-0 rounded-md transition",
                 dragActive
-                  ? 'pointer-events-auto border-2 border-dashed border-primary bg-primary/5'
-                  : 'pointer-events-none',
-              ].join(' ')}
+                  ? "pointer-events-auto border-2 border-dashed border-primary bg-primary/5"
+                  : "pointer-events-none",
+              ].join(" ")}
               aria-hidden={!dragActive}
             >
               {dragActive && (
                 <div className="absolute inset-0 grid place-items-center">
                   <div className="text-sm text-muted-foreground">
-                    Release to upload to “{currentPath || 'root'}”
+                    Release to upload to “{currentPath || "root"}”
                   </div>
                 </div>
               )}
@@ -577,6 +736,29 @@ export default function DocumentsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <RenameDialog
+        open={renameDialog.open}
+        defaultValue={renameDialog.doc?.title}
+        onClose={() => setRenameDialog({ open: false, doc: null })}
+        onConfirm={async (newTitle) => {
+          if (!newTitle || newTitle === renameDialog.doc?.title) return
+
+          const isFile = renameDialog.doc?.id?.length === 36
+          if (isFile) {
+            await supabase.from("documents")
+              .update({ title: newTitle })
+              .eq("id", renameDialog.doc.id)
+            await refreshFiles()
+          } else {
+            // pass old + new name
+            await handleRenameFolder(renameDialog.doc.title, newTitle)
+          }
+        }}
+      />
+
+
     </div>
   );
+
 }
