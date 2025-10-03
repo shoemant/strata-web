@@ -246,23 +246,49 @@ export default function ManagerDashboard() {
       })()
   }, [building, folder, supabase])
 
+  // --- helpers ---
+  const ymd = (d) => {
+    const x = new Date(d)
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`
+  }
+
+  // --- dates that have events (build BEFORE calendar) ---
+  const eventDays = useMemo(() => {
+    const set = new Set()
+
+    const add = (ts) => ts && set.add(ymd(ts))
+
+    bookings.forEach((bk) => add(bk.start_time))
+    announcements.forEach((a) => add(a.event_date || a.created_at))
+    pending.forEach((r) => add(r.submitted_at))
+    completed.forEach((r) => add(r.updated_at))
+
+    return set
+  }, [bookings, announcements, pending, completed])
+
+
   const calendar = useMemo(() => (
     <div className="p-2 rounded-md bg-background">
       <Calendar
+        // Optional: force remount when eventDays change
+        // key={`ev-${Array.from(eventDays).join(",")}`}
         mode="single"
-        selected={calDate ?? undefined}   // only highlight if user picked something
-        onSelect={(d) => setCalDate(d)}   // user’s selection
+        selected={calDate ?? undefined}
+        onSelect={(d) => setCalDate(d)}
         className="w-full border border-border/30 rounded-lg bg-card"
         modifiers={{
-          today: new Date(), // custom style for today
+          today: new Date(),
+          hasEvents: (date) => eventDays.has(ymd(date)),
         }}
         modifiersClassNames={{
-          today: "border border-primary text-primary font-semibold", // outline style only
+          today: "border border-primary text-primary font-semibold",
+          hasEvents:
+            "relative after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1.5 after:h-1.5 after:rounded-full after:bg-primary",
         }}
       />
-
     </div>
-  ), [calDate])
+  ), [calDate, eventDays])
+
 
 
 
@@ -271,6 +297,7 @@ export default function ManagerDashboard() {
     await supabase.from("maintenance_requests").update({ status: "completed", updated_at }).eq("id", id)
     setPending((p) => p.filter((r) => r.id !== id))
   }
+
 
   // Build day-specific schedule items (prefer event_date for announcements)
   const scheduleItems = useMemo(() => {

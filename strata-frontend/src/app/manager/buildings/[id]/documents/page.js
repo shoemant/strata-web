@@ -25,14 +25,18 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 import { RenameDialog } from '@/components/documents/RenameDialog';
+import { VisibilityDialog } from '@/components/documents/VisibilityDialog';
 
 export default function DocumentsPage() {
   const supabase = useSupabaseClient();
   const session = useSession();
   const fileInputRef = useRef(null);
-
+  const [visibilityDialog, setVisibilityDialog] = useState({ open: false, folder: null })
   const { id: raw } = useParams();
   const buildingId = Array.isArray(raw) ? raw[0] : raw;
+
+
+  console.log("📌 buildingId from useParams:", buildingId);
 
   const [currentPath, setCurrentPath] = useState(''); // '' means root
   const [newFolder, setNewFolder] = useState('');
@@ -154,7 +158,7 @@ export default function DocumentsPage() {
       // MODE A: parent-path model -> immediate children are rows with folder === currentPath
       const immediate = rows.filter(r => (r.folder || '') === (currentPath || ''));
       items = immediate
-        .map(r => ({ segment: r.title, title: r.title }))
+        .map(r => ({ id: r.id, segment: r.title, title: r.title }))
         .sort((a, b) => a.title.localeCompare(b.title));
     } else {
       // MODE B: self-path model -> immediate children are rows with folder starting with `${pref}`
@@ -175,7 +179,14 @@ export default function DocumentsPage() {
       });
 
       items = Array.from(titleBySeg.entries())
-        .map(([segment, title]) => ({ segment, title }))
+        .map(([segment, title]) => {
+          const exact = rows.find(r => r.folder === `${pref}${segment}`);
+          return {
+            id: exact ? exact.id : null,   // ✅ ensure ID is always present
+            segment,
+            title
+          };
+        })
         .sort((a, b) => a.title.localeCompare(b.title));
     }
 
@@ -271,7 +282,7 @@ export default function DocumentsPage() {
     }
 
     if (!exists?.length) {
-      const { error } = await supabase.from('documents').insert({
+      const { data: inserted, error } = await supabase.from('documents').insert({
         building_id: buildingId,
         uploaded_by: session?.user?.id || null,
         folder: newPath,     // <-- this is Mode B (self-path)
@@ -279,12 +290,22 @@ export default function DocumentsPage() {
         is_folder: true,
         url: null,
         path: null,
-      });
+      }).select("id").single();
 
       if (error) {
         console.error('Error creating folder:', error.message);
         return;
       }
+
+      // ✅ use the ID we just inserted
+      setChildFolders((prev) => {
+        const next = [...prev];
+        if (!next.some((f) => f.segment === segment)) {
+          next.push({ id: inserted.id, segment, title: segment });
+        }
+        return next.sort((a, b) => a.title.localeCompare(b.title));
+      });
+      setNewFolder('');
     }
 
     setChildFolders((prev) => {
@@ -644,6 +665,19 @@ export default function DocumentsPage() {
                             />
                             Rename
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (!f.id) {
+                                alert("This folder has no database ID. Please refresh or re-create it.");
+                                return;
+                              }
+                              setVisibilityDialog({ open: true, folder: f });
+                            }}
+                          >
+                            <Image src="/images/icons/visibility.png" alt="Visibility" width={16} height={16} className="mr-2" />
+                            Visibility
+                          </DropdownMenuItem>
+
                           <DropdownMenuItem onClick={() => handleDeleteChildFolder(segment)} className="text-destructive">
                             <Trash2 className="h-4 w-4 mr-2" /> Delete
                           </DropdownMenuItem>
@@ -757,8 +791,20 @@ export default function DocumentsPage() {
         }}
       />
 
+      <VisibilityDialog
+        open={visibilityDialog.open}
+        folder={visibilityDialog.folder}
+        onClose={() => setVisibilityDialog({ open: false, folder: null })}
+        supabase={supabase}
+        buildingId={buildingId}
+
+      />
+
+
 
     </div>
+
+
   );
 
 }
