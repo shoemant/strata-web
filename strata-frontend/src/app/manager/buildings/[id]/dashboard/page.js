@@ -815,7 +815,7 @@ function StatsCard({ title, value, icon, trend, color = "secondary" }) {
 function HeroWithAnnouncements({ name, imageUrl, announcements, announcementsHref }) {
   // Always include building hero as the first "announcement"
   const deckItems = [
-    ...(announcements || []),
+
     {
       id: "building-hero",
       image_url: imageUrl || null,
@@ -823,6 +823,7 @@ function HeroWithAnnouncements({ name, imageUrl, announcements, announcementsHre
       message: null,
       isBuilding: true, // flag to render differently
     },
+    ...(announcements || []),
   ]
 
   return (
@@ -877,7 +878,7 @@ function BuildingHero({ name, imageUrl, children }) {
         }
       >
         {hasImage && (
-          <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60" />
+          <div className="absolute inset-0 bg-gradient-to-br  via-black/40 to-black/60" />
         )}
         {!hasImage && (
           <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-transparent to-primary/20" />
@@ -942,7 +943,7 @@ function AnnouncementsDeck({ items, href }) {
             : { background: "linear-gradient(to bottom right, #4f46e5, #6366f1)" }
         }
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60" />
+        <div className="absolute inset-0 bg-gradient-to-br via-black/40 to-black/60" />
         <div className="absolute inset-0 flex items-center justify-center">
           <h1 className="text-5xl md:text-7xl font-bold uppercase tracking-widest text-white drop-shadow-lg">
             {active.title}
