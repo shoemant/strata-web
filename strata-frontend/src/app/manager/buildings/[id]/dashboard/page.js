@@ -303,7 +303,6 @@ export default function ManagerDashboard() {
   const scheduleItems = useMemo(() => {
     if (!calDate) return []
 
-    if (!calDate) return []
     const dayStart = new Date(calDate)
 
     dayStart.setHours(0, 0, 0, 0)
@@ -815,38 +814,31 @@ function StatsCard({ title, value, icon, trend, color = "secondary" }) {
 function HeroWithAnnouncements({ name, imageUrl, announcements, announcementsHref }) {
   // Always include building hero as the first "announcement"
   const deckItems = [
-
     {
       id: "building-hero",
       image_url: imageUrl || null,
       subtitle: null,
       message: null,
-      isBuilding: true, // flag to render differently
+      isBuilding: true,
     },
     ...(announcements || []),
   ]
 
+  const hasDeck = deckItems.length > 0
+
   return (
-    <section className="relative z-10">
+    // ★ FIX: add pb on small screens; on md+ we handle spacing differently in BuildingHero
+    <section
+      className={[
+        "relative z-10",
+        hasDeck ? "pb-6 md:pb-0" : "" // ★ FIX
+      ].join(" ")}
+    >
       <AnnouncementsDeck items={deckItems} href={announcementsHref} />
     </section>
   )
 }
 
-// --- Original code, kept for easy reversion ---
-/*
-const hasDeck = (announcements?.length ?? 0) > 0
-return (
-  <section className={["relative z-10", hasDeck ? "mb-[13rem] md:mb-[10rem] lg:mb-[13rem]" : ""].join(" ")}>
-    <BuildingHero name={name} imageUrl={imageUrl}>
-      <AnnouncementsDeck items={announcements} href={announcementsHref} />
-    </BuildingHero>
-  </section>
-)
-*/
-
-
-/* Enhanced building hero with modern gradient and glass effects */
 function BuildingHero({ name, imageUrl, children }) {
   const hasImage = Boolean(imageUrl)
   const hasDeck = Boolean(children)
@@ -860,31 +852,31 @@ function BuildingHero({ name, imageUrl, children }) {
       : "h-40 md:h-48"
 
   return (
-    <div className="relative">
+    <div className={["relative", hasDeck ? "md:pb-40" : ""].join(" ")}>
       <div
         className={[
           "relative rounded-2xl overflow-hidden border border-border/20",
           heightClass,
-          !hasImage ? "bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5" : "",
+          !hasImage ? "bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5" : "bg-black", // ★ FIX: solid bg behind letterboxing
         ].join(" ")}
-        style={
-          hasImage
-            ? {
-              backgroundImage: `url(${imageUrl})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-            }
-            : undefined
-        }
       >
-        {hasImage && (
-          <div className="absolute inset-0 bg-gradient-to-br  via-black/40 to-black/60" />
-        )}
-        {!hasImage && (
+        {hasImage ? (
+          <>
+            {/* ★ FIX: use <img> + object-contain on small, object-cover on md+ */}
+            <img
+              src={imageUrl}
+              alt={name || "Building hero"}
+              className="absolute inset-0 w-full h-full object-contain" // ★ FIX
+              loading="eager"
+              decoding="async"
+            />
+            <div className="absolute inset-0 bg-gradient-to-br from-black/20 via-black/40 to-black/60" />
+          </>
+        ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-transparent to-primary/20" />
         )}
 
-        {/* Building name always centered */}
+        {/* Building name */}
         <div className="absolute top-6 left-0 right-0 flex justify-center">
           <h1
             className={[
@@ -896,16 +888,16 @@ function BuildingHero({ name, imageUrl, children }) {
           </h1>
         </div>
 
-        {/* Decorative elements */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-4 right-4 w-32 h-32 border border-white/20 rounded-full"></div>
-          <div className="absolute bottom-4 left-4 w-24 h-24 border border-white/20 rounded-full"></div>
+        {/* Decorative rings */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none">
+          <div className="absolute top-4 right-4 w-32 h-32 border border-white/20 rounded-full" />
+          <div className="absolute bottom-4 left-4 w-24 h-24 border border-white/20 rounded-full" />
         </div>
       </div>
 
-      {/* Hanging banner for announcements if present */}
+      {/* Deck stays static on small; hangs on md+ */}
       {hasDeck && (
-        <div className="absolute left-1/2 top-[100%] -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl px-3 sm:px-4 z-30">
+        <div className="mt-4 md:mt-0 md:absolute md:left-1/2 md:top-[100%] md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-6xl md:px-3 md:z-30">
           {children}
         </div>
       )}
@@ -913,14 +905,13 @@ function BuildingHero({ name, imageUrl, children }) {
   )
 }
 
+
 function AnnouncementsDeck({ items, href }) {
   const [index, setIndex] = useState(0)
 
   useEffect(() => {
     if (!items || items.length <= 1) return
-    const id = setInterval(() => {
-      setIndex((i) => (i + 1) % items.length)
-    }, 6000)
+    const id = setInterval(() => setIndex((i) => (i + 1) % items.length), 6000)
     return () => clearInterval(id)
   }, [items])
 
@@ -928,85 +919,100 @@ function AnnouncementsDeck({ items, href }) {
 
   const active = items[index]
 
-  // If this is the building hero slide
+  // Building hero slide
   if (active.isBuilding) {
+    // inside AnnouncementsDeck, building slide branch
     return (
       <div
-        className="relative rounded-2xl overflow-hidden border border-border/20 h-[24rem] md:h-[28rem] lg-h-[32rem]"
-        style={
-          active.image_url
-            ? {
-              backgroundImage: `url(${active.image_url})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-            }
-            : { background: "linear-gradient(to bottom right, #4f46e5, #6366f1)" }
-        }
+        className="relative rounded-2xl overflow-hidden border border-border/20 bg-black max-h-[70vh]" // no fixed h-*, clamp if you want
       >
-        <div className="absolute inset-0 bg-gradient-to-br via-black/40 to-black/60" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <h1 className="text-5xl md:text-7xl font-bold uppercase tracking-widest text-white drop-shadow-lg">
+        {active.image_url ? (
+          <>
+            {/* Image defines height */}
+            <img
+              src={active.image_url}
+              alt="Building"
+              className="block w-full h-auto select-none"  // ← key: h-auto, not absolute
+              loading="eager"
+              decoding="async"
+            />
+            <div className="absolute inset-0 bg-gradient-to-br from-black/20 via-black/40 to-black/60 pointer-events-none" />
+          </>
+        ) : (
+          <div className="w-full h-auto" style={{ background: "linear-gradient(to bottom right, #4f46e5, #6366f1)" }} />
+        )}
+
+        {/* Text overlay */}
+        <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+          <h1 className="text-4xl md:text-6xl font-bold uppercase tracking-widest text-white drop-shadow-lg">
             {active.title}
           </h1>
         </div>
 
-        {items.length > 1 && (
-          <DeckControls items={items} index={index} setIndex={setIndex} />
-        )}
+        {items.length > 1 && <DeckControls items={items} index={index} setIndex={setIndex} />}
+        {items.length > 1 && <DeckDots items={items} index={index} setIndex={setIndex} />}
       </div>
+
     )
+
   }
 
-  // --- Normal announcement slide ---
+  // Normal announcement slide
   const hasImg = Boolean(active?.image_url)
   const formattedDate = active?.event_date
-    ? new Date(active.event_date).toLocaleDateString(undefined, {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-    })
+    ? new Date(active.event_date).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })
     : null
 
   return (
+    // inside AnnouncementsDeck, normal slide branch
     <Link href={href} className="block group">
       <div
-        className={[
-          "relative rounded-2xl overflow-hidden border border-border/20 h-[24rem] md:h-[28rem] lg-h-[32rem]",
-          "shadow-2xl ring-1 ring-white/10 backdrop-blur-sm hover:shadow-3xl hover:ring-white/20 transition-all duration-300 group-hover:scale-[1.02]",
-        ].join(" ")}
-        style={
-          hasImg
-            ? { backgroundImage: `url(${active.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }
-            : { background: active.banner_bg_color || "linear-gradient(to bottom right, #4f46e5, #6366f1)" }
-        }
+        className="relative rounded-2xl overflow-hidden border border-border/20 bg-black shadow-2xl ring-1 ring-white/10
+               backdrop-blur-sm hover:shadow-3xl hover:ring-white/20 transition-all duration-300 group-hover:scale-[1.02] max-h-[70vh]"
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-transparent to-black/40" />
-        <div className="relative h-full w-full px-6 md:px-8 flex items-center justify-between">
-          <div className="space-y-2 text-white">
+        {hasImg ? (
+          <>
+            <img
+              src={active.image_url}
+              alt={active.title || "Announcement"}
+              className="block w-full h-auto select-none" // ← key: h-auto, not absolute
+              loading="lazy"
+              decoding="async"
+            />
+            <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-transparent to-black/40 pointer-events-none" />
+          </>
+        ) : (
+          <div className="w-full" style={{ background: active.banner_bg_color || "linear-gradient(to bottom right, #4f46e5, #6366f1)" }}>
+            {/* optional: spacer if you want a minimum height without bars */}
+          </div>
+        )}
+
+        {/* Content overlay (doesn't block clicks to arrows/dots) */}
+        <div className="absolute inset-0 z-20 px-4 md:px-8 flex items-center justify-between pointer-events-none">
+          <div className="space-y-2 text-white max-w-[80%]">
             <div className="text-xs md:text-sm uppercase opacity-80 tracking-wider font-medium">Announcement</div>
-            <div className="text-3xl md:text-4xl font-bold leading-tight line-clamp-2">{active.title}</div>
-            {active.subtitle && <div className="text-base md:text-lg opacity-90 line-clamp-3">{active.subtitle}</div>}
+            <div className="text-2xl md:text-4xl font-bold leading-tight line-clamp-2">{active.title}</div>
+            {active.subtitle && <div className="text-sm md:text-lg opacity-90 line-clamp-3">{active.subtitle}</div>}
             {formattedDate && (
-              <div className="inline-flex items-center px-4 py-2 mt-4 rounded-lg bg-primary text-primary-foreground text-base md:text-lg font-semibold shadow">
+              <div className="inline-flex items-center px-3 md:px-4 py-1.5 md:py-2 mt-3 md:mt-4 rounded-lg bg-primary text-primary-foreground text-sm md:text-lg font-semibold shadow">
                 {formattedDate}
               </div>
             )}
           </div>
-
-          {items.length > 1 && <DeckControls items={items} index={index} setIndex={setIndex} />}
         </div>
 
-        {items.length > 1 && (
-          <DeckDots items={items} index={index} setIndex={setIndex} />
-        )}
+        {items.length > 1 && <DeckControls items={items} index={index} setIndex={setIndex} />}
+        {items.length > 1 && <DeckDots items={items} index={index} setIndex={setIndex} />}
       </div>
     </Link>
+
   )
 }
 
+
 function DeckControls({ items, index, setIndex }) {
   return (
-    <div className="flex items-center gap-3 absolute right-4 bottom-4">
+    <div className="flex items-center gap-3 absolute right-4 bottom-4 z-30 pointer-events-auto"> {/* ★ FIX */}
       <button
         type="button"
         aria-label="Previous"
@@ -1035,10 +1041,11 @@ function DeckControls({ items, index, setIndex }) {
 
 function DeckDots({ items, index, setIndex }) {
   return (
-    <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-2">
+    <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-2 z-30 pointer-events-auto"> {/* ★ FIX */}
       {items.map((_, i) => (
         <button
           key={i}
+          aria-label={`Go to slide ${i + 1}`} // ★ FIX (a11y)
           onClick={(e) => {
             e.preventDefault()
             setIndex(i)
@@ -1052,6 +1059,7 @@ function DeckDots({ items, index, setIndex }) {
     </div>
   )
 }
+
 
 
 /* --- Small helpers for schedule labels --- */
