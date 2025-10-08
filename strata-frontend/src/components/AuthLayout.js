@@ -21,7 +21,7 @@ export default function AuthLayout({ children }) {
           md:basis-1/2 xl:basis-3/5
           portrait:h-1/3
           relative overflow-hidden
-          bg-background
+          bg-background 
         "
             >
                 {/* Light image */}

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 841.89 595.28">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 841.89 595.28"  preserveAspectRatio="xMidYMid slice">
   <defs>
     <style>
       .cls-1, .cls-2, .cls-3 {
@@ -782,7 +782,7 @@
   <g class="cls-122">
     <g id="Layer_1" data-name="Layer 1">
       <g id="Layer_1-2" data-name="Layer 1">
-        <rect class="cls-155" width="841.89" height="595.28"/>
+
         <polygon class="cls-157" points="785.29 547.37 749.48 567.98 355.62 341.24 391.42 320.63 785.29 547.37"/>
         <g>
           <polygon class="cls-93" points="391.28 103.5 425.44 83.84 425.44 241.15 391.28 260.82 391.28 103.5"/>
