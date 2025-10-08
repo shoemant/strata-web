@@ -224,12 +224,8 @@ export default function LoginFlowPage() {
 
   return (
     <AuthLayout>
-      <div
-        className="w-full max-w-md p-8 space-y-6 rounded-2xl shadow-lg relative overflow-hidden
-                   bg-card text-foreground
-                   bg-gradient-to-br from-blue-50 to-white
-                   dark:from-neutral-900 dark:to-neutral-950 dark:bg-none"
-      >
+      <div className="w-full max-w-md p-6 sm:p-8 overflow-y-auto max-h-[90vh] rounded-2xl shadow-lg bg-card text-foreground bg-gradient-to-br from-blue-50 to-white dark:from-neutral-900 dark:to-neutral-950 dark:bg-none">
+
         {/* Optional global dim overlay while checking */}
         {loadingEmail && (
           <div className="absolute inset-0 bg-background/50 dark:bg-black/40 backdrop-blur-[1px] pointer-events-none" />
@@ -274,8 +270,8 @@ export default function LoginFlowPage() {
               className="space-y-6"
               aria-busy={loadingEmail}
             >
-              <h2 className="text-2xl font-bold text-center">Welcome!</h2>
-              <p className="text-center text-muted-foreground dark:text-neutral-400">
+              <h2 className="text-xl sm:text-2xl font-bold text-center">Welcome!</h2>
+              <p className="text-sm sm:text-base text-center text-muted-foreground dark:text-neutral-400">
                 Enter your email to log in or register.
               </p>
 
