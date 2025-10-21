@@ -1,4 +1,3 @@
-// src/app/login/page.js
 "use client";
 
 import { useState } from "react";
@@ -110,19 +109,32 @@ export default function LoginFlowPage() {
     const trimmed = email.trim().toLowerCase();
     setLoadingEmail(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/check-user`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
-      });
-      const { exists, invite: inv, error: backendError } = await res.json();
-      if (backendError) return setError(backendError);
-      setInvite(inv);
-      setEmail(trimmed);
-      goToStep(exists ? "password" : "signup");
+
+      // Check if user exists directly via Supabase Auth (fast)
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('id, role')
+        .eq('email', trimmed)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') throw error;
+
+      if (data) {
+        goToStep('password'); // existing user
+      } else {
+        // Check pending invite (optional)
+        const { data: invite } = await supabase
+          .from('invitations')
+          .select('role')
+          .eq('email', trimmed)
+          .eq('status', 'pending')
+          .maybeSingle();
+        setInvite(invite?.role ?? null);
+        goToStep('signup');
+      }
     } catch (err) {
       console.error(err);
-      setError("Something went wrong. Please try again later.");
+      setError('Something went wrong.');
     } finally {
       setLoadingEmail(false);
     }

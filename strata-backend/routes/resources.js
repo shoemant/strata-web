@@ -15,7 +15,7 @@
  */
 
 const express = require('express');
-const { supabase } = require('../lib/supabaseClient');
+const { supabase } = require('./lib/supabaseClient');
 const router = express.Router();
 
 /*---------------------------------------------------

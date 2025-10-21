@@ -1005,10 +1005,8 @@ function AnnouncementsDeck({ items, href }) {
         {items.length > 1 && <DeckDots items={items} index={index} setIndex={setIndex} />}
       </div>
     </Link>
-
   )
 }
-
 
 function DeckControls({ items, index, setIndex }) {
   return (

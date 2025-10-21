@@ -18,7 +18,7 @@
  */
 
 const express = require('express');
-const { supabase } = require('../lib/supabaseClient'); // Supabase client for backend DB access
+const { supabase } = require('./lib/supabaseClient'); // Supabase client for backend DB access
 const router = express.Router();
 
 /**

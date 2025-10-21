@@ -17,7 +17,7 @@
  */
 
 const express = require('express');
-const { sendInvitationEmail } = require('../lib/sendInvite.js');
+const { sendInvitationEmail } = require('./lib/sendInvite.js');
 
 const router = express.Router();
 
