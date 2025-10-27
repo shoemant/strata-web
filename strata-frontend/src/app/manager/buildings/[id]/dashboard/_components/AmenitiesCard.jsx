@@ -1,10 +1,46 @@
+"use client"
+
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Users, ArrowUpRight } from "lucide-react"
 import Link from "next/link"
 
-export default function AmenitiesCard({ building, resources }) {
-  const buildingHref = (sub) => (building ? `/manager/buildings/${building.id}/${sub}` : "#")
+export default function AmenitiesCard({ building }) {
+  const buildingHref = (sub) =>
+    building ? `/manager/buildings/${building.id}/${sub}` : "#"
+
+  const hardcodedResources = [
+    {
+      id: "elevator",
+      name: "Elevator",
+      img: "/images/tiles_bg/elevator.jpg",
+      href: buildingHref("resources"),
+    },
+    {
+      id: "gym",
+      name: "Gym",
+      img: "/images/tiles_bg/gym.jpg",
+      href: buildingHref("resources"),
+    },
+    {
+      id: "meetingroom",
+      name: "Meeting Room 1",
+      img: "/images/tiles_bg/meetingroom.jpg",
+      href: buildingHref("resources"),
+    },
+        {
+      id: "meetingroom2",
+      name: "Meeting Room 2",
+      img: "/images/tiles_bg/meetingroom.jpg",
+      href: buildingHref("resources"),
+    },
+    {
+      id: "parking",
+      name: "Parking",
+      img: "/images/tiles_bg/parking.jpg",
+      href: buildingHref("resources"),
+    },
+  ]
 
   return (
     <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
@@ -21,31 +57,32 @@ export default function AmenitiesCard({ building, resources }) {
           </Button>
         </Link>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {resources.length > 0 ? (
-          <div className="grid gap-4">
-            {resources.slice(0, 3).map((r) => (
-              <Card key={r.id} className="bg-primary/10 border border-primary/20">
-                <CardContent className="flex justify-between items-center p-4">
-                  <div>
-                    <h3 className="font-medium">{r.name}</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {r.available_start} – {r.available_end}
-                    </p>
-                  </div>
-                  <Link href={buildingHref("resources")}>
-                    <Button variant="outline" size="sm">
-                      Manage
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-muted-foreground">No resources configured yet.</div>
-        )}
-      </CardContent>
+
+     <CardContent className="relative space-y-4">
+  {/* Horizontal scroll carousel */}
+  <div className="flex space-x-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-2">
+    {hardcodedResources.map((r) => (
+      <Link
+        key={r.id}
+        href={r.href}
+        className="relative min-w-[260px] h-44 rounded-xl bg-cover bg-center snap-start flex-shrink-0 overflow-hidden group shadow-md transition-transform duration-200 hover:scale-[1.03]"
+        style={{ backgroundImage: `url(${r.img})` }}
+      >
+        {/* Dark overlay */}
+        <div className="absolute inset-0 bg-black/40 group-hover:bg-black/55 transition" />
+
+        {/* Text overlay */}
+        <div className="relative h-full flex items-end p-4">
+          <h3 className="text-lg font-semibold text-white drop-shadow-xl group-hover:underline">
+            {r.name}
+          </h3>
+        </div>
+      </Link>
+    ))}
+  </div>
+</CardContent>
+
+
     </Card>
   )
 }

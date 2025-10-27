@@ -4,17 +4,24 @@ import { Card, CardHeader } from "@/components/ui/card"
 
 export default function RewardsCard() {
   return (
-    <Card className="border-border/50 bg-muted/40 backdrop-blur-sm relative overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
+    <Card className="relative overflow-hidden border-border/50 bg-[url('/images/tiles_bg/rewards.jpg')] bg-cover bg-center">
+      
+      {/* Stronger dark overlay only behind content */}
+      <div className="absolute inset-0 bg-black/55" />
+
+      <CardHeader className="relative z-10 flex flex-row items-center justify-between pb-4">
         <div className="flex items-center space-x-2">
-          <h2 className="text-xl text-muted-foreground font-semibold">Rewards</h2>
-          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-500/20 text-yellow-600 border border-yellow-500/30">
+          <h2 className="text-xl font-semibold text-white drop-shadow-lg">
+            Rewards
+          </h2>
+          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-500 text-black drop-shadow-md">
             In Progress
           </span>
         </div>
       </CardHeader>
-      <div className="p-4 flex flex-col items-center justify-center text-center space-y-2">
-        <p className="text-sm text-muted-foreground mt-3 italic">
+
+      <div className="relative z-10 p-4 flex flex-col items-center justify-center text-center space-y-2">
+        <p className="text-sm text-white font-medium mt-3 drop-shadow-lg">
           This feature is currently being developed. Stay tuned!
         </p>
       </div>
