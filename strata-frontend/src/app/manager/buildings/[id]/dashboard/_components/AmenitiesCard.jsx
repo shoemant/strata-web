@@ -13,7 +13,7 @@ export default function AmenitiesCard({ building }) {
     {
       id: "elevator",
       name: "Elevator",
-      img: "/images/tiles_bg/elevator.jpg",
+      img: "/images/tiles_bg/elevator.JPG",
       href: buildingHref("resources"),
     },
     {
@@ -37,7 +37,7 @@ export default function AmenitiesCard({ building }) {
     {
       id: "parking",
       name: "Parking",
-      img: "/images/tiles_bg/parking.jpg",
+      img: "/images/tiles_bg/parking.JPG",
       href: buildingHref("resources"),
     },
   ]

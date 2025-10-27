@@ -4,7 +4,7 @@ import { Card, CardHeader } from "@/components/ui/card"
 
 export default function RewardsCard() {
   return (
-    <Card className="relative overflow-hidden border-border/50 bg-[url('/images/tiles_bg/rewards.jpg')] bg-cover bg-center">
+    <Card className="relative overflow-hidden border-border/50 bg-[url('/images/tiles_bg/rewards.JPG')] bg-cover bg-center">
       
       {/* Stronger dark overlay only behind content */}
       <div className="absolute inset-0 bg-black/55" />
