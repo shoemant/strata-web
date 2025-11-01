@@ -68,15 +68,13 @@ export default function AmenitiesCard({ building }) {
         className="relative min-w-[260px] h-44 rounded-xl bg-cover bg-center snap-start flex-shrink-0 overflow-hidden group shadow-md transition-transform duration-200 hover:scale-[1.03]"
         style={{ backgroundImage: `url(${r.img})` }}
       >
-        {/* Dark overlay */}
-        <div className="absolute inset-0 bg-black/40 group-hover:bg-black/55 transition" />
+ <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
 
-        {/* Text overlay */}
-        <div className="relative h-full flex items-end p-4">
-          <h3 className="text-lg font-semibold text-white drop-shadow-xl group-hover:underline">
-            {r.name}
-          </h3>
-        </div>
+  <div className="relative h-full flex items-end p-4">
+    <h3 className="text-lg font-semibold text-white drop-shadow-xl group-hover:underline">
+      {r.name}
+    </h3>
+  </div>
       </Link>
     ))}
   </div>

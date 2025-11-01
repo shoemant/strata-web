@@ -1,16 +1,25 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
-/* =================== HERO WITH ANNOUNCEMENTS =================== */
-export default function HeroWithAnnouncements({ name, imageUrl, announcements = [], announcementsHref }) {
+/**
+ * HeroWithAnnouncements
+ * - Entire image is ALWAYS visible (object-contain, h-auto)
+ * - Height auto-adjusts to active slide via ResizeObserver
+ * - Max height capped per breakpoint to avoid overflow (no bars/jumps)
+ */
+export default function HeroWithAnnouncements({
+  name,
+  imageUrl,
+  announcements = [],
+  announcementsHref,
+}) {
   const deckItems = [
     {
       id: "building-hero",
       image_url: imageUrl || null,
-      title: name || "—",
       isBuilding: true,
     },
     ...announcements,
@@ -22,36 +31,34 @@ export default function HeroWithAnnouncements({ name, imageUrl, announcements = 
     </section>
   )
 }
+
 function AnnouncementsDeck({ items, href }) {
   const [index, setIndex] = useState(0)
-  const [prev, setPrev] = useState(0)
   const containerRef = useRef(null)
   const slideRefs = useRef([])
 
+  // Auto-advance
   useEffect(() => {
     if (!items || items.length <= 1) return
-    const id = setInterval(() => {
-      setPrev(index)
-      setIndex((i) => (i + 1) % items.length)
-    }, 8000)
+    const id = setInterval(() => setIndex((i) => (i + 1) % items.length), 8000)
     return () => clearInterval(id)
-  }, [items, index])
+  }, [items])
 
-  // ✅ Observe and auto-adjust container height
+  // Auto-fit container to active slide's height
   useEffect(() => {
     const el = containerRef.current
     const activeSlide = slideRefs.current[index]
     if (!el || !activeSlide) return
 
-    const resizeObserver = new ResizeObserver(() => {
+    const ro = new ResizeObserver(() => {
       el.style.height = `${activeSlide.offsetHeight}px`
     })
-    resizeObserver.observe(activeSlide)
+    ro.observe(activeSlide)
 
-    // Set initial height
+    // initial height
     el.style.height = `${activeSlide.offsetHeight}px`
 
-    return () => resizeObserver.disconnect()
+    return () => ro.disconnect()
   }, [index])
 
   if (!items?.length) return null
@@ -59,16 +66,19 @@ function AnnouncementsDeck({ items, href }) {
   return (
     <div
       ref={containerRef}
-      className="relative group w-full overflow-hidden rounded-2xl border border-border/20 transition-[height] duration-700 ease-[cubic-bezier(0.45,0,0.55,1)]"
+      className="
+        relative group w-full overflow-hidden rounded-2xl border border-border/20 bg-black
+        transition-[height] duration-700 ease-[cubic-bezier(0.45,0,0.55,1)]
+      "
     >
       {items.map((item, i) => {
         const isActive = i === index
         return (
           <div
-            key={item.id}
+            key={item.id ?? i}
             ref={(el) => (slideRefs.current[i] = el)}
             className={[
-              "absolute inset-x-0 top-0 transition-opacity duration-[2000ms] ease-[cubic-bezier(0.45,0,0.55,1)] will-change-[opacity]",
+              "absolute inset-x-0 top-0 will-change-[opacity] transition-opacity duration-[750ms]",
               isActive ? "opacity-100 z-10" : "opacity-0 z-0",
             ].join(" ")}
           >
@@ -91,36 +101,40 @@ function AnnouncementsDeck({ items, href }) {
   )
 }
 
-
 function BuildingSlide({ active }) {
   return (
-    <div className="relative flex justify-center bg-black/90">
+    <div className="relative">
       {active.image_url ? (
-        <img
-          src={active.image_url}
-          alt="Building hero"
-          className="w-full h-auto max-h-[80vh] object-contain select-none transition-transform duration-700 ease-in-out"
-          loading="eager"
-          decoding="async"
-        />
+        <>
+          <img
+            src={active.image_url}
+            alt="Building"
+            className="
+              block w-full h-auto object-contain select-none
+              max-h-[68vh] sm:max-h-[70vh] md:max-h-[72vh] lg:max-h-[75vh]
+            "
+            loading="eager"
+            decoding="async"
+          />
+
+          {/* ✅ Overlay removed */}
+        </>
       ) : (
-        <div className="w-full h-64 bg-gradient-to-br from-primary/40 via-primary/20 to-primary/10" />
+        <div className="block w-full h-[44vh] sm:h-[48vh] md:h-[52vh] lg:h-[56vh] bg-gradient-to-br from-primary/40 via-primary/20 to-primary/10" />
       )}
 
-      {/* Overlay gradient & title */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black/20 via-black/40 to-black/60 pointer-events-none" />
+      {/* Title overlay placeholder — currently empty */}
       <div className="absolute inset-0 flex items-center justify-center text-center px-4">
-        <h1 className="text-3xl md:text-5xl font-bold uppercase tracking-widest text-white drop-shadow-xl">
-          {active.title}
-        </h1>
       </div>
     </div>
   )
 }
 
+
 function AnnouncementSlide({ active, href }) {
   const hasImg = Boolean(active?.image_url)
-  const formattedDate = active?.event_date
+  const hasDate = Boolean(active?.event_date)
+  const formattedDate = hasDate
     ? new Date(active.event_date).toLocaleDateString(undefined, {
         weekday: "long",
         month: "long",
@@ -128,96 +142,126 @@ function AnnouncementSlide({ active, href }) {
       })
     : null
 
+  // Give a touch more headroom when we show a date pill
+  const imgMaxH = hasDate
+    ? "max-h-[76vh] sm:max-h-[78vh] md:max-h-[80vh] lg:max-h-[82vh]"
+    : "max-h-[68vh] sm:max-h-[70vh] md:max-h-[72vh] lg:max-h-[75vh]"
+
   return (
-    <Link href={href} className="block relative">
-      {/* ====== Image / background ====== */}
-      <div className="relative flex justify-center bg-black/90">
+    <Link href={href ?? "#"} className="block relative">
+      <div className="relative">
         {hasImg ? (
           <img
             src={active.image_url}
             alt={active.title || "Announcement"}
-            className="w-full h-auto max-h-[80vh] object-contain select-none"
+            className={["block w-full h-auto object-contain select-none", imgMaxH].join(" ")}
             loading="lazy"
             decoding="async"
           />
         ) : (
           <div
-            className="w-full h-auto"
+            className="block w-full h-[40vh] sm:h-[44vh] md:h-[48vh] lg:h-[52vh]"
             style={{
               background:
-                active.banner_bg_color ||
+                active?.banner_bg_color ||
                 "linear-gradient(to bottom right, #4f46e5, #6366f1)",
-              height: "400px",
             }}
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-transparent pointer-events-none" />
+
+        {/* ✨ Localized gradient wash just behind the text (not full-width) */}
+        <div className="absolute inset-0 z-10 pointer-events-none">
+          <div className="
+            absolute left-0 top-0 bottom-0
+            w-[78%] sm:w-[65%] md:w-[56%] lg:w-[50%]
+            bg-gradient-to-r from-black/70 via-black/40 to-transparent
+          " />
+        </div>
+
+        {/* Text stack */}
+        <div className="absolute inset-0 z-20 flex flex-col justify-center px-4 sm:px-6 md:px-8 pointer-events-none">
+          <div className="space-y-2 text-white max-w-[92%] sm:max-w-[82%] md:max-w-[70%]">
+            <div className="text-[2.8vw] sm:text-[1.8vw] md:text-sm uppercase opacity-80 tracking-wider font-medium">
+              Announcement
+            </div>
+
+            <div
+              className="
+                font-bold leading-tight line-clamp-2
+                text-[clamp(1rem,5.2vw,2rem)]
+                sm:text-[clamp(1.2rem,3.6vw,2.4rem)]
+                md:text-[clamp(1.4rem,3vw,2.8rem)]
+              "
+              style={{ textShadow: "0 1px 2px rgba(0,0,0,0.6)" }}
+            >
+              {active.title}
+            </div>
+
+            {active.subtitle && (
+              <div
+                className="
+                  inline-block rounded-lg px-2.5 py-2
+                  bg-black/45 backdrop-blur-[1.5px]
+                  opacity-95 leading-snug break-words line-clamp-3
+                  text-[clamp(0.9rem,3.2vw,1.1rem)]
+                  sm:text-[clamp(1rem,2.4vw,1.2rem)]
+                  md:text-[clamp(1.05rem,2vw,1.25rem)]
+                "
+                style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}
+              >
+                {active.subtitle}
+              </div>
+            )}
+
+            {hasDate && (
+              <div
+                className="
+                  inline-flex items-center px-[3vw] sm:px-4 py-[1vw] sm:py-2 mt-3
+                  rounded-lg bg-primary text-primary-foreground font-semibold shadow
+                  text-[clamp(0.7rem,2.5vw,1rem)]
+                "
+                style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.35)" }}
+              >
+                {formattedDate}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-
-      {/* ====== Responsive overlay text (safe-fit) ====== */}
-      {/* Content overlay */}
-<div className="absolute inset-0 z-20 flex flex-col justify-center px-4 sm:px-6 md:px-8 pointer-events-none">
-  <div className="space-y-2 text-white max-w-[90%] sm:max-w-[80%]">
-    <div className="text-[2.8vw] sm:text-[1.6vw] md:text-sm uppercase opacity-80 tracking-wider font-medium">
-      Announcement
-    </div>
-
-    <div className="font-bold leading-tight line-clamp-2 text-[clamp(1rem,5vw,2rem)] sm:text-[clamp(1.3rem,3.5vw,2.5rem)] md:text-[clamp(1.6rem,3vw,2.8rem)]">
-      {active.title}
-    </div>
-
-    {active.subtitle && (
-      <div className="opacity-90 line-clamp-3 break-words text-[clamp(0.85rem,3.2vw,1.1rem)] sm:text-[clamp(0.9rem,2.4vw,1.2rem)] md:text-[clamp(1rem,2vw,1.25rem)] leading-snug">
-        {active.subtitle}
-      </div>
-    )}
-
-    {formattedDate && (
-      <div className="inline-flex items-center px-[3vw] sm:px-4 py-[1vw] sm:py-2 mt-3 rounded-lg bg-primary text-primary-foreground font-semibold shadow text-[clamp(0.7rem,2.5vw,1rem)]">
-        {formattedDate}
-      </div>
-    )}
-  </div>
-</div>
-
     </Link>
   )
 }
 
 
 
-/* =================== DECK CONTROLS (AUTO-HIDE ARROWS) =================== */
+
 function DeckControls({ items, index, setIndex }) {
   const [visible, setVisible] = useState(true)
   const hideTimer = useRef(null)
 
-  // Auto-hide after 2 s of inactivity
   useEffect(() => {
-    const resetTimer = () => {
+    const reset = () => {
       clearTimeout(hideTimer.current)
       setVisible(true)
-      hideTimer.current = setTimeout(() => setVisible(false), 1)
+      hideTimer.current = setTimeout(() => setVisible(false), 2000)
     }
-
-    window.addEventListener("mousemove", resetTimer)
-    window.addEventListener("touchstart", resetTimer)
-
-    resetTimer() // initial trigger
+    window.addEventListener("mousemove", reset)
+    window.addEventListener("touchstart", reset)
+    reset()
     return () => {
       clearTimeout(hideTimer.current)
-      window.removeEventListener("mousemove", resetTimer)
-      window.removeEventListener("touchstart", resetTimer)
+      window.removeEventListener("mousemove", reset)
+      window.removeEventListener("touchstart", reset)
     }
   }, [])
 
   return (
     <div
       className={[
-        "absolute inset-x-0 bottom-6 flex justify-between items-center px-3 sm:px-6 z-30 transition-opacity duration-500 ease-in-out",
+        "absolute inset-x-0 bottom-4 md:bottom-6 flex justify-between items-center px-3 sm:px-6 z-30 transition-opacity duration-500",
         visible ? "opacity-100" : "opacity-0 pointer-events-none",
       ].join(" ")}
     >
-      {/* Prev Button */}
       <button
         type="button"
         aria-label="Previous slide"
@@ -226,18 +270,11 @@ function DeckControls({ items, index, setIndex }) {
           setIndex((i) => (i - 1 + items.length) % items.length)
           setVisible(true)
         }}
-        className="
-          pointer-events-auto inline-flex items-center justify-center
-          w-9 h-9 sm:w-11 sm:h-11 rounded-full
-          bg-black/40 hover:bg-black/60
-          backdrop-blur-md border border-white/20
-          transition-all duration-300 shadow-lg
-        "
+        className="pointer-events-auto inline-flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/20 transition-all shadow-lg"
       >
         <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
       </button>
 
-      {/* Next Button */}
       <button
         type="button"
         aria-label="Next slide"
@@ -246,13 +283,7 @@ function DeckControls({ items, index, setIndex }) {
           setIndex((i) => (i + 1) % items.length)
           setVisible(true)
         }}
-        className="
-          pointer-events-auto inline-flex items-center justify-center
-          w-9 h-9 sm:w-11 sm:h-11 rounded-full
-          bg-black/40 hover:bg-black/60
-          backdrop-blur-md border border-white/20
-          transition-all duration-300 shadow-lg
-        "
+        className="pointer-events-auto inline-flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/20 transition-all shadow-lg"
       >
         <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
       </button>
@@ -260,32 +291,30 @@ function DeckControls({ items, index, setIndex }) {
   )
 }
 
-/* =================== DECK DOTS (AUTO-HIDE TOO) =================== */
 function DeckDots({ items, index, setIndex }) {
   const [visible, setVisible] = useState(true)
   const hideTimer = useRef(null)
 
   useEffect(() => {
-    const resetTimer = () => {
+    const reset = () => {
       clearTimeout(hideTimer.current)
       setVisible(true)
-      hideTimer.current = setTimeout(() => setVisible(false), 1)
+      hideTimer.current = setTimeout(() => setVisible(false), 2000)
     }
-
-    window.addEventListener("mousemove", resetTimer)
-    window.addEventListener("touchstart", resetTimer)
-    resetTimer()
+    window.addEventListener("mousemove", reset)
+    window.addEventListener("touchstart", reset)
+    reset()
     return () => {
       clearTimeout(hideTimer.current)
-      window.removeEventListener("mousemove", resetTimer)
-      window.removeEventListener("touchstart", resetTimer)
+      window.removeEventListener("mousemove", reset)
+      window.removeEventListener("touchstart", reset)
     }
   }, [])
 
   return (
     <div
       className={[
-        "absolute bottom-3 sm:bottom-4 left-0 right-0 flex items-center justify-center gap-2 sm:gap-3 z-30 transition-opacity duration-500 ease-in-out",
+        "absolute bottom-3 sm:bottom-4 md:bottom-6 left-0 right-0 flex items-center justify-center gap-2 sm:gap-3 z-30 transition-opacity duration-500",
         visible ? "opacity-100" : "opacity-0 pointer-events-none",
       ].join(" ")}
     >

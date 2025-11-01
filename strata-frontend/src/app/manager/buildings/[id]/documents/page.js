@@ -562,7 +562,7 @@ export default function DocumentsPage() {
                 size="sm"
                 onClick={() => setCurrentPath("")}
               >
-                <Home className="h-4 w-4 mr-1" /> root
+                <Home className="h-4 w-4 mr-1" /> Home
               </Button>
 
               {crumbs.map((seg, i) => (

@@ -33,6 +33,16 @@ html, body {
 }
 
 
+/* --- Calendar Fix: Center Day Numbers on Mobile --- */
+
+@layer utilities {
+  .text-shadow-lg-white {
+    text-shadow:
+      0 0 8px rgba(0, 0, 0, 0.85),
+      0 0 16px rgba(0, 0, 0, 0.7);
+  }
+}
+
 
 
 

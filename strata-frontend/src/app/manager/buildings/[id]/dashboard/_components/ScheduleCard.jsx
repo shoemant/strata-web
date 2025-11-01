@@ -102,25 +102,27 @@ export default function ScheduleCard({ building, announcements, pending, complet
       </CardHeader>
 
       <CardContent className="space-y-6">
-        <div className="p-2 rounded-md bg-background">
-          <Calendar
-            mode="single"
-            selected={calDate ?? undefined}
-            onSelect={(d) => setCalDate(d)}
-            className="w-full border border-border/30 rounded-lg bg-card"
-            modifiers={{
-              today: new Date(),
-              hasEvents: (date) => eventDays.has(ymd(date)),
-            }}
-            modifiersClassNames={{
-              // ✅ distinct look for today vs selected
-              today: "text-primary font-semibold",
-              selected: "bg-primary text-primary-foreground font-semibold rounded-md",
-              hasEvents:
-                "relative after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1.5 after:h-1.5 after:rounded-full after:bg-primary",
-            }}
-          />
-        </div>
+        <div className="p-2 rounded-md bg-background flex justify-center">
+  <div className="w-full max-w-[330px] sm:max-w-none">
+    <Calendar
+      mode="single"
+      selected={calDate ?? undefined}
+      onSelect={(d) => setCalDate(d)}
+      className="w-full border border-border/30 rounded-lg bg-card mx-auto"
+      modifiers={{
+        today: new Date(),
+        hasEvents: (date) => eventDays.has(ymd(date)),
+      }}
+      modifiersClassNames={{
+        today: "text-primary font-semibold",
+        selected: "bg-primary text-primary-foreground font-semibold rounded-md",
+        hasEvents:
+          "relative after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1.5 after:h-1.5 after:rounded-full after:bg-primary",
+      }}
+    />
+  </div>
+</div>
+
 
         <Separator className="bg-border/50" />
 
