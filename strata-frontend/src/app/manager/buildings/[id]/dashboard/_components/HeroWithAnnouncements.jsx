@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useSwipeable } from "react-swipeable"
+
 
 /**
  * HeroWithAnnouncements
@@ -11,7 +13,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
  * - Max height capped per breakpoint to avoid overflow (no bars/jumps)
  */
 export default function HeroWithAnnouncements({
-  name,
+  // name,
   imageUrl,
   announcements = [],
   announcementsHref,
@@ -32,10 +34,22 @@ export default function HeroWithAnnouncements({
   )
 }
 
+
+
 function AnnouncementsDeck({ items, href }) {
   const [index, setIndex] = useState(0)
   const containerRef = useRef(null)
   const slideRefs = useRef([])
+  const didSwipeRef = useRef(false)   // ← add this
+
+  const handlers = useSwipeable({
+    onSwipeStart: () => { didSwipeRef.current = false },
+    onSwiping: () => { didSwipeRef.current = true },  // ← mark movement
+    onSwipedLeft: () => setIndex((i) => (i + 1) % items.length),
+    onSwipedRight: () => setIndex((i) => (i - 1 + items.length) % items.length),
+    trackMouse: true,
+    preventScrollOnSwipe: true,
+  })
 
   // Auto-advance
   useEffect(() => {
@@ -71,25 +85,32 @@ function AnnouncementsDeck({ items, href }) {
         transition-[height] duration-700 ease-[cubic-bezier(0.45,0,0.55,1)]
       "
     >
-      {items.map((item, i) => {
-        const isActive = i === index
-        return (
-          <div
-            key={item.id ?? i}
-            ref={(el) => (slideRefs.current[i] = el)}
-            className={[
-              "absolute inset-x-0 top-0 will-change-[opacity] transition-opacity duration-[750ms]",
-              isActive ? "opacity-100 z-10" : "opacity-0 z-0",
-            ].join(" ")}
-          >
-            {item.isBuilding ? (
-              <BuildingSlide active={item} />
-            ) : (
-              <AnnouncementSlide active={item} href={href} />
-            )}
-          </div>
-        )
-      })}
+      <div
+        {...handlers}
+        onMouseDownCapture={(e) => e.preventDefault()}   // ← stop native drag/select
+        className="touch-pan-y select-none relative w-full h-full"
+        style={{ touchAction: "pan-y", userSelect: "none" }}
+      >
+        {items.map((item, i) => {
+          const isActive = i === index
+          return (
+            <div
+              key={item.id ?? i}
+              ref={(el) => (slideRefs.current[i] = el)}
+              className={[
+                "absolute inset-x-0 top-0 will-change-[opacity] transition-opacity duration-[750ms]",
+                isActive ? "opacity-100 z-10" : "opacity-0 z-0",
+              ].join(" ")}
+            >
+              {item.isBuilding ? (
+                <BuildingSlide active={item} didSwipeRef={didSwipeRef} />
+              ) : (
+                <AnnouncementSlide active={item} href={href} didSwipeRef={didSwipeRef} />
+              )}
+            </div>
+          )
+        })}
+      </div>
 
       {items.length > 1 && (
         <>
@@ -106,16 +127,15 @@ function BuildingSlide({ active }) {
     <div className="relative">
       {active.image_url ? (
         <>
-          <img
-            src={active.image_url}
-            alt="Building"
-            className="
-              block w-full h-auto object-contain select-none
-              max-h-[68vh] sm:max-h-[70vh] md:max-h-[72vh] lg:max-h-[75vh]
-            "
-            loading="eager"
-            decoding="async"
-          />
+         <img
+  src={active.image_url}
+  alt="Building"
+  className="block w-full h-auto object-contain select-none max-h-[68vh] sm:max-h-[70vh] md:max-h-[72vh] lg:max-h-[75vh]"
+  loading="eager"
+  decoding="async"
+  draggable={false}                         // ← add
+  onDragStart={(e) => e.preventDefault()}   // ← add
+/>
 
           {/* ✅ Overlay removed */}
         </>
@@ -148,16 +168,18 @@ function AnnouncementSlide({ active, href }) {
     : "max-h-[68vh] sm:max-h-[70vh] md:max-h-[72vh] lg:max-h-[75vh]"
 
   return (
-    <Link href={href ?? "#"} className="block relative">
-      <div className="relative">
+<div className="block relative">
+        <div className="relative">
         {hasImg ? (
-          <img
-            src={active.image_url}
-            alt={active.title || "Announcement"}
-            className={["block w-full h-auto object-contain select-none", imgMaxH].join(" ")}
-            loading="lazy"
-            decoding="async"
-          />
+<img
+  src={active.image_url}
+  alt={active.title || "Announcement"}
+  className={["block w-full h-auto object-contain select-none", imgMaxH].join(" ")}
+  loading="lazy"
+  decoding="async"
+  draggable={false}                         // ← add
+  onDragStart={(e) => e.preventDefault()}   // ← add
+/>
         ) : (
           <div
             className="block w-full h-[40vh] sm:h-[44vh] md:h-[48vh] lg:h-[52vh]"
@@ -228,7 +250,7 @@ function AnnouncementSlide({ active, href }) {
           </div>
         </div>
       </div>
-    </Link>
+    </div>
   )
 }
 
