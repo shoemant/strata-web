@@ -40,8 +40,9 @@ export async function signInWithPassword(email, password, rememberMe) {
         });
     }
 
-    // Accept invites if present
-    await supabase.rpc("accept_invites_for_current_user").catch(() => { });
+    // ✅ FIXED
+    const { error: rpcError } = await supabase.rpc("accept_invites_for_current_user");
+    if (rpcError) console.warn("RPC error:", rpcError.message);
 
     const { data: me } = await supabase.auth.getUser();
     return me?.user?.id ?? null;
