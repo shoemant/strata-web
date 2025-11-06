@@ -8,6 +8,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import DeleteConfirmDialog from "./_components/DeleteConfirmDialog";
+
 import {
   FolderPlus,
   UploadCloud,
@@ -59,6 +61,13 @@ export default function DocumentsPage() {
     [currentPath]
   );
   const prefix = useMemo(() => (currentPath ? `${currentPath}/` : ''), [currentPath]);
+
+  const [deleteDialog, setDeleteDialog] = useState({
+    open: false,
+    target: null,
+    isFolder: false,
+  });
+
 
   // Safer global drag guards (prevent tab navigation only when dropping on body)
   useEffect(() => {
@@ -393,8 +402,12 @@ export default function DocumentsPage() {
   }
 
   // Delete file
-  async function handleDelete(doc) {
-    if (!confirm(`Delete file “${doc.title}”?`)) return;
+  async function handleDelete(doc, skipDialog = false) {
+    // If dialog should be shown, open it
+    if (!skipDialog) {
+      setDeleteDialog({ open: true, target: doc, isFolder: false });
+      return;
+    }
 
     if (doc.path) {
       const { error: storageErr } = await supabase.storage.from('documents').remove([doc.path]);
@@ -466,13 +479,7 @@ export default function DocumentsPage() {
 
   async function handleDeleteChildFolder(name) {
     const target = currentPath ? `${currentPath}/${name}` : name;
-    if (!confirm(`Delete folder “${target}” and EVERYTHING inside it?`)) return;
-    try {
-      await deleteFolderRecursive(target);
-    } catch (err) {
-      console.error('Folder delete failed:', err);
-      alert('Failed to delete folder. Check console for details.');
-    }
+    setDeleteDialog({ open: true, target, isFolder: true });
   }
 
   async function handleDeleteCurrentFolder() {
@@ -593,20 +600,29 @@ export default function DocumentsPage() {
                   Create
                 </Button>
               </form>
+              <div className="flex items-center gap-2 flex-wrap">
+                <label
+                  className={[
+                    "inline-flex items-center px-3 py-2 rounded-md cursor-pointer text-sm whitespace-nowrap transition",
+                    uploading
+                      ? "bg-secondary text-secondary-foreground"
+                      : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
 
-              <div className="flex items-center gap-2">
-                <input type="file" ref={fileInputRef} multiple />
-                <Button
-                  onClick={handleUpload}
-                  disabled={!canUpload || uploading}
-                  className="inline-flex items-center"
-                  title={`Upload to ${currentPath || "root"}`}
-                >
-                  <UploadCloud className="mr-2 h-4 w-4" />
+                    // ✨ Highlight during drag
+                    dragActive && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+                  ].join(" ")}
+                >                  <UploadCloud className="mr-2 h-4 w-4" />
                   {uploading
                     ? `Uploading ${uploadCount.done}/${uploadCount.total}…`
-                    : "Upload"}
-                </Button>
+                    : "Upload Files"}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    multiple
+                    className="hidden"
+                    onChange={handleUpload}
+                  />
+                </label>
               </div>
             </div>
           </div>
@@ -677,6 +693,7 @@ export default function DocumentsPage() {
                             <Image src="/images/icons/visibility.png" alt="Visibility" width={16} height={16} className="mr-2" />
                             Visibility
                           </DropdownMenuItem>
+
 
                           <DropdownMenuItem onClick={() => handleDeleteChildFolder(segment)} className="text-destructive">
                             <Trash2 className="h-4 w-4 mr-2" /> Delete
@@ -761,9 +778,10 @@ export default function DocumentsPage() {
             >
               {dragActive && (
                 <div className="absolute inset-0 grid place-items-center">
-                  <div className="text-sm text-muted-foreground">
-                    Release to upload to “{currentPath || "root"}”
+                  <div className="text-sm text-primary font-medium animate-pulse">
+                    Drop to upload to “{currentPath || "Home"}”
                   </div>
+
                 </div>
               )}
             </div>
@@ -798,6 +816,25 @@ export default function DocumentsPage() {
         supabase={supabase}
         buildingId={buildingId}
 
+      />
+
+      <DeleteConfirmDialog
+        open={deleteDialog.open}
+        title={deleteDialog.isFolder ? "Delete Folder?" : "Delete File?"}
+        description={
+          deleteDialog.isFolder
+            ? "This will permanently remove this folder and everything inside."
+            : "This file will be permanently deleted."
+        }
+        onClose={() => setDeleteDialog({ open: false, target: null, isFolder: false })}
+        onConfirm={async () => {
+          if (deleteDialog.isFolder) {
+            await deleteFolderRecursive(deleteDialog.target);
+          } else {
+            await handleDelete(deleteDialog.target, true); // modify handleDelete to skip dialog loop
+          }
+          setDeleteDialog({ open: false, target: null, isFolder: false });
+        }}
       />
 
 

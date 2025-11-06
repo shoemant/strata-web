@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Calendar } from "@/components/ui/calendar"
@@ -12,7 +12,7 @@ import { labelForType, badgeVariantForType } from "./helpers"
 
 export default function ScheduleCard({ building, announcements, pending, completed, bookings }) {
   const [calDate, setCalDate] = useState(null)
-
+const listRef = useRef(null)
   // helper: format YYYY-MM-DD
   const ymd = (d) => {
     const x = new Date(d)
@@ -92,6 +92,12 @@ export default function ScheduleCard({ building, announcements, pending, complet
     return items.sort((a, b) => a.when.localeCompare(b.when))
   }, [calDate, bookings, announcements, pending, completed, building])
 
+  useEffect(() => {
+  if (scheduleItems.length > 0 && listRef.current) {
+    listRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+}, [scheduleItems])
+
   return (
     <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
       <CardHeader className="pb-4">
@@ -123,10 +129,11 @@ export default function ScheduleCard({ building, announcements, pending, complet
   </div>
 </div>
 
+        {scheduleItems.length > 0 && (
+          <>
+       <Separator className="bg-border/50" />
 
-        <Separator className="bg-border/50" />
-
-        <div>
+         <div ref={listRef}>
           <div className="flex items-center justify-between mb-4">
             {calDate ? (
               <h3 className="font-medium text-foreground">
@@ -178,6 +185,8 @@ export default function ScheduleCard({ building, announcements, pending, complet
             )}
           </ScrollArea>
         </div>
+        </>
+        )}
       </CardContent>
     </Card>
   )

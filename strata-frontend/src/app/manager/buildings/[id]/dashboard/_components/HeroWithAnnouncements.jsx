@@ -51,13 +51,6 @@ function AnnouncementsDeck({ items, href }) {
     preventScrollOnSwipe: true,
   })
 
-  // Auto-advance
-  useEffect(() => {
-    if (!items || items.length <= 1) return
-    const id = setInterval(() => setIndex((i) => (i + 1) % items.length), 8000)
-    return () => clearInterval(id)
-  }, [items])
-
   // Auto-fit container to active slide's height
   useEffect(() => {
     const el = containerRef.current
@@ -191,21 +184,11 @@ function AnnouncementSlide({ active, href }) {
           />
         )}
 
-        {/* ✨ Localized gradient wash just behind the text (not full-width) */}
-        <div className="absolute inset-0 z-10 pointer-events-none">
-          <div className="
-            absolute left-0 top-0 bottom-0
-            w-[78%] sm:w-[65%] md:w-[56%] lg:w-[50%]
-            bg-gradient-to-r from-black/70 via-black/40 to-transparent
-          " />
-        </div>
 
-        {/* Text stack */}
-        <div className="absolute inset-0 z-20 flex flex-col justify-center px-4 sm:px-6 md:px-8 pointer-events-none">
-          <div className="space-y-2 text-white max-w-[92%] sm:max-w-[82%] md:max-w-[70%]">
-            <div className="text-[2.8vw] sm:text-[1.8vw] md:text-sm uppercase opacity-80 tracking-wider font-medium">
-              Announcement
-            </div>
+ {/* Text stack - pushed to bottom-left */}
+ <div className="absolute inset-0 z-20 flex flex-col justify-end px-4 sm:px-6 md:px-8 pb-[6vh] pointer-events-none">
+   <div className="space-y-2 text-white max-w-[90%] sm:max-w-[75%] md:max-w-[60%]">
+
 
             <div
               className="
@@ -218,29 +201,25 @@ function AnnouncementSlide({ active, href }) {
             >
               {active.title}
             </div>
-
-            {active.subtitle && (
-              <div
-                className="
-                  inline-block rounded-lg px-2.5 py-2
-                  bg-black/45 backdrop-blur-[1.5px]
-                  opacity-95 leading-snug break-words line-clamp-3
-                  text-[clamp(0.9rem,3.2vw,1.1rem)]
-                  sm:text-[clamp(1rem,2.4vw,1.2rem)]
-                  md:text-[clamp(1.05rem,2vw,1.25rem)]
-                "
-                style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}
-              >
-                {active.subtitle}
-              </div>
-            )}
-
+     {active.message && (
+       <div
+         className="
+           mt-2 leading-snug break-words line-clamp-3
+           text-[clamp(0.9rem,3.2vw,1.1rem)]
+          sm:text-[clamp(1rem,2.4vw,1.2rem)]
+          md:text-[clamp(1.05rem,2vw,1.25rem)]
+        "
+         style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}
+       >
+         {active.message}
+       </div>
+     )}
             {hasDate && (
               <div
                 className="
-                  inline-flex items-center px-[3vw] sm:px-4 py-[1vw] sm:py-2 mt-3
-                  rounded-lg bg-primary text-primary-foreground font-semibold shadow
-                  text-[clamp(0.7rem,2.5vw,1rem)]
+            inline-flex items-center px-3 sm:px-4 py-1.5 mt-3
+            rounded-md bg-primary text-primary-foreground font-medium shadow-lg
+            text-[clamp(0.75rem,2vw,1rem)]
                 "
                 style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.35)" }}
               >
