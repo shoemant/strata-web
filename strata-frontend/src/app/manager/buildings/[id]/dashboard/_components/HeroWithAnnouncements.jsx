@@ -18,14 +18,20 @@ export default function HeroWithAnnouncements({
   announcements = [],
   announcementsHref,
 }) {
-  const deckItems = [
-    {
-      id: "building-hero",
-      image_url: imageUrl || null,
-      isBuilding: true,
-    },
-    ...announcements,
-  ]
+const nowIso = new Date().toISOString();
+
+const validAnnouncements = announcements.filter((a) => {
+  return !a.expires_at || new Date(a.expires_at) > new Date(nowIso);
+});
+
+const deckItems = [
+  {
+    id: "building-hero",
+    image_url: imageUrl || null,
+    isBuilding: true,
+  },
+  ...validAnnouncements,
+];
 
   return (
     <section className="relative z-10 pb-6 md:pb-0">
