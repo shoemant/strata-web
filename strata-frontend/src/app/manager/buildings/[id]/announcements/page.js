@@ -65,8 +65,11 @@ export default function AnnouncementsPage() {
       .storage
       .from('announcement-presets')
       .getPublicUrl(preset.image_path);
-    return data?.publicUrl || '';
+
+    // cache-buster
+    return data?.publicUrl ? `${data.publicUrl}?v=${Date.now()}` : '';
   }
+
 
   function applyPreset(preset) {
     if (!preset) return;
@@ -313,7 +316,9 @@ export default function AnnouncementsPage() {
         day: 'numeric',
       })
       : '',
-    imagePreviewUrl: form.image_file ? URL.createObjectURL(form.image_file) : form.image_url || '',
+    imagePreviewUrl: form.image_file
+      ? URL.createObjectURL(form.image_file)
+      : form.image_url ? `${form.image_url}?v=${Date.now()}` : '',
     useImage: form.use_image,
     textColor: form.text_color || '#ffffff',
     bgColor: form.banner_bg_color || '#1d4ed8',
