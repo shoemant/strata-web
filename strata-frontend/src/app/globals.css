@@ -28,9 +28,11 @@ body {
 html, body {
   margin: 0;
   padding: 0;
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
+
 
 
 /* --- Calendar Fix: Center Day Numbers on Mobile --- */
@@ -42,6 +44,79 @@ html, body {
       0 0 16px rgba(0, 0, 0, 0.7);
   }
 }
+
+/* =========================
+   Cubone FileManager Dark Theme Overrides
+   ========================= */
+
+.fm-shell {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgb(38 38 38);
+  background: rgb(10 10 10);
+}
+
+/* default text */
+.fm-shell,
+.fm-shell * {
+  color: rgb(229 229 229);
+}
+
+/* backgrounds */
+.fm-shell .fm-root,
+.fm-shell [class*="container"],
+.fm-shell [class*="layout"],
+.fm-shell [class*="panel"] {
+  background: rgb(10 10 10) !important;
+}
+
+/* header / toolbar areas */
+.fm-shell [class*="header"],
+.fm-shell [class*="toolbar"],
+.fm-shell [class*="top"] {
+  background: rgb(15 15 15) !important;
+  border-bottom: 1px solid rgb(38 38 38) !important;
+}
+
+/* buttons (clean + minimal) */
+.fm-shell button {
+  background: transparent !important;
+  border: 1px solid rgb(38 38 38) !important;
+  border-radius: 10px !important;
+  padding: 6px 10px !important;
+  box-shadow: none !important;
+}
+
+.fm-shell button:hover {
+  background: rgb(23 23 23) !important;
+}
+
+/* inputs/search */
+.fm-shell input,
+.fm-shell select {
+  background: rgb(15 15 15) !important;
+  border: 1px solid rgb(38 38 38) !important;
+  color: rgb(229 229 229) !important;
+  border-radius: 10px !important;
+}
+
+/* file cards / rows */
+.fm-shell [class*="file"],
+.fm-shell [class*="item"],
+.fm-shell [class*="row"],
+.fm-shell [class*="card"] {
+  background: rgb(12 12 12) !important;
+  border: 1px solid rgb(38 38 38) !important;
+  border-radius: 14px !important;
+}
+
+.fm-shell [class*="file"]:hover,
+.fm-shell [class*="item"]:hover,
+.fm-shell [class*="row"]:hover,
+.fm-shell [class*="card"]:hover {
+  background: rgb(18 18 18) !important;
+}
+
 
 
 

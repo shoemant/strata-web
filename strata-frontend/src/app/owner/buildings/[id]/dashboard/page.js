@@ -1,201 +1,296 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useSessionContext, useSupabaseClient } from '@supabase/auth-helpers-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  useSessionContext,
+  useSupabaseClient,
+} from '@supabase/auth-helpers-react';
+
 import ProtectedRoute from '@/components/ProtectedRoute';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Calendar } from '@/components/ui/calendar';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import HeroWithAnnouncements from '@/components/dashboard/HeroWithAnnouncements';
+import ScheduleCard from '@/components/dashboard/ScheduleCard';
+
+import {
+  ArrowUpRight,
+  Calendar,
+  Wrench,
+  FileText,
+  Building2,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  TrendingUp,
+  Gift,
+  Sparkles,
+} from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import FolderExplorerCard from '@/components/FolderExplorerCard';
+import { Skeleton } from '@/components/ui/skeleton';
 
-/* ---------- tiny color helpers ---------- */
-function percentToHex(p) {
-  const n = Math.round((Math.max(0, Math.min(100, p)) / 100) * 255);
-  return n.toString(16).padStart(2, '0');
-}
-function hexWithAlpha(hex, p) {
-  if (!hex || !/^#([0-9a-f]{6})$/i.test(hex)) return undefined;
-  return `${hex}${percentToHex(p)}`;
+// -----------------------------
+// Utils
+// -----------------------------
+function formatDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
+// -----------------------------
+// Fetch helpers (MATCH YOUR DB)
+// -----------------------------
+async function fetchHeroImageUrl(supabase, buildingId) {
+  if (!buildingId) return null;
+
+  const { data, error } = await supabase
+    .from('documents')
+    .select('url, created_at')
+    .eq('building_id', buildingId)
+    .eq('is_folder', false)
+    .eq('folder', 'building_image')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.url ?? null;
+}
+
+async function fetchOwnerBuilding(supabase, userId) {
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select(
+      `
+      building_id,
+      buildings:buildings!fk_user_profiles_building (
+        id,
+        name,
+        address
+      )
+    `
+    )
+    .eq('id', userId)
+    .single();
+
+  if (error) throw error;
+
+  return {
+    buildingId: data?.building_id ?? null,
+    building: data?.buildings ?? null,
+  };
+}
+
+async function fetchOwnerAnnouncements(supabase, buildingId) {
+  if (!buildingId) return [];
+  const nowIso = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('announcements')
+    .select('*')
+    .eq('building_id', buildingId)
+    .in('target_audience', ['all', 'owners'])
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * BOOKINGS NOTE:
+ * Supabase can't join bookings.resource_id -> resources.id unless there's an FK.
+ * So we fetch bookings, then fetch resources separately and merge.
+ */
+async function fetchUpcomingBookings(
+  supabase,
+  { buildingId, userId, limit = 5 }
+) {
+  if (!buildingId || !userId) return [];
+  const nowIso = new Date().toISOString();
+
+  const { data: bookings, error: bErr } = await supabase
+    .from('bookings')
+    .select('id, start_time, end_time, status, purpose, notes, resource_id')
+    .eq('building_id', buildingId)
+    .eq('user_id', userId)
+    .gte('start_time', nowIso)
+    .order('start_time', { ascending: true })
+    .limit(limit);
+
+  if (bErr) throw bErr;
+
+  const resourceIds = Array.from(
+    new Set((bookings || []).map((b) => b.resource_id).filter(Boolean))
+  );
+
+  if (resourceIds.length === 0) {
+    return (bookings || []).map((b) => ({ ...b, resource: null }));
+  }
+
+  const { data: resources, error: rErr } = await supabase
+    .from('resources')
+    .select('id, name, location_description')
+    .in('id', resourceIds);
+
+  if (rErr) throw rErr;
+
+  const resourceMap = new Map((resources || []).map((r) => [r.id, r]));
+
+  return (bookings || []).map((b) => ({
+    ...b,
+    resource: resourceMap.get(b.resource_id) ?? null,
+  }));
+}
+
+async function fetchOpenRequests(supabase, { buildingId, userId, limit = 5 }) {
+  if (!buildingId || !userId) return [];
+
+  const { data, error } = await supabase
+    .from('maintenance_requests')
+    .select('id, title, status, submitted_at, updated_at')
+    .eq('building_id', buildingId)
+    .eq('user_id', userId)
+    .in('status', ['pending', 'in_progress', 'open'])
+    .order('submitted_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchCounts(supabase, { buildingId, userId }) {
+  if (!buildingId || !userId) {
+    return { upcomingBookings: 0, openRequests: 0, documents: 0 };
+  }
+
+  const nowIso = new Date().toISOString();
+
+  const [b, r, d] = await Promise.all([
+    supabase
+      .from('bookings')
+      .select('id', { count: 'exact', head: true })
+      .eq('building_id', buildingId)
+      .eq('user_id', userId)
+      .gte('start_time', nowIso),
+
+    supabase
+      .from('maintenance_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('building_id', buildingId)
+      .eq('user_id', userId)
+      .in('status', ['pending', 'in_progress', 'open']),
+
+    supabase
+      .from('documents')
+      .select('id', { count: 'exact', head: true })
+      .eq('building_id', buildingId)
+      .eq('is_folder', false),
+  ]);
+
+  if (b.error) throw b.error;
+  if (r.error) throw r.error;
+  if (d.error) throw d.error;
+
+  return {
+    upcomingBookings: b.count ?? 0,
+    openRequests: r.count ?? 0,
+    documents: d.count ?? 0,
+  };
+}
+
+// -----------------------------
+// Component
+// -----------------------------
 export default function OwnerDashboard() {
   const supabase = useSupabaseClient();
   const { session, isLoading: sessionLoading } = useSessionContext();
-  const { id: routeId } = useParams();
+
+  const userId = session?.user?.id;
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [building, setBuilding] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
-  const [myPending, setMyPending] = useState([]);
-  const [myCompleted, setMyCompleted] = useState([]);
-  const [myBookings, setMyBookings] = useState([]);
 
-  // doc preview
-  const [folder, setFolder] = useState('root'); // if your FolderExplorerCard controls its own folder, you can remove this
-  const [calDate, setCalDate] = useState(new Date());
-  const [loading, setLoading] = useState(true);
+  const [counts, setCounts] = useState({
+    upcomingBookings: 0,
+    openRequests: 0,
+    documents: 0,
+  });
+
+  const [upcomingBookings, setUpcomingBookings] = useState([]);
+  const [openRequests, setOpenRequests] = useState([]);
 
   const loadedForUserRef = useRef(null);
-  const userId = session?.user?.id;
-  const buildingId = Array.isArray(routeId) ? routeId[0] : routeId;
-
-  // Helpers
-  const startOfDayISO = (d) => {
-    const x = new Date(d);
-    x.setHours(0, 0, 0, 0);
-    return x.toISOString();
-  };
-  const endOfDayISO = (d) => {
-    const x = new Date(d);
-    x.setHours(23, 59, 59, 999);
-    return x.toISOString();
-  };
-
-
-  const buildingHref = (sub) => (building ? `/owner/buildings/${building.id}/${sub}` : '#');
-
-  const loadDashboard = async (uid, bid) => {
-    // 1) Building record (by route id). RLS should ensure the owner is allowed.
-    const { data: b } = await supabase
-      .from('buildings')
-      .select('id,name,hero_image_url')
-      .eq('id', bid)
-      .maybeSingle();
-
-    if (!b) {
-      setBuilding(null);
-      setAnnouncements([]);
-      setMyPending([]);
-      setMyCompleted([]);
-      setMyBookings([]);
-      return;
-    }
-
-    // Optional hero image lookup from documents (same as your manager view)
-    const { data: heroDoc, error: heroErr } = await supabase
-      .from('documents')
-      .select('url')
-      .eq('building_id', b.id)
-      .eq('is_folder', false)
-      .or(['folder.eq.building_image', `path.ilike.documents/${b.id}/building_image/%`].join(','))
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (heroErr) console.error('hero image lookup error', heroErr);
-    setBuilding({ ...b, hero_image_url: heroDoc?.url ?? b.hero_image_url ?? null });
-
-    // 2) Active announcements
-    const nowIso = new Date().toISOString();
-    const { data: annRes } = await supabase
-      .from('announcements')
-      .select(`
-        id, title, subtitle, message, target_audience,
-        created_at, event_date, expires_at, expires_after_days,
-        image_url, text_color, banner_bg_color, overlay_color, overlay_opacity
-      `)
-      .eq('building_id', b.id)
-      .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
-      .order('created_at', { ascending: false });
-    setAnnouncements(annRes || []);
-
-    // helper: YYYY-MM-DD
-    function toISODateOnly(d) {
-      const y = d.getFullYear();
-      const m = `${d.getMonth() + 1}`.padStart(2, '0');
-      const day = `${d.getDate()}`.padStart(2, '0');
-      return `${y}-${m}-${day}`;
-    }
-
-    // helper: compose local Date from date (YYYY-MM-DD) + HH:mm *without* UTC parsing
-    function composeLocalDateTime(dateStr, timeLabel) {
-      const [y, m, d] = dateStr.split('-').map(Number);   // e.g. "2025-09-15" → [2025, 9, 15]
-      const [hh, mm] = (timeLabel || '00:00').split(':').map(Number);
-      return new Date(y, (m || 1) - 1, d || 1, hh || 0, mm || 0, 0, 0); // local time
-    }
-
-    // --- inside loadDashboard(uid, bid) ---
-    const today = new Date();
-    const in30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    const startDateStr = toISODateOnly(today);
-    const endDateStr = toISODateOnly(in30);
-
-    const { data: bookingsData, error: bookingsErr } = await supabase
-      .from('resource_slot_bookings')
-      .select(`
-    id,
-    booking_date,
-    time_label,
-    resource_id,
-    resources!inner ( id, name, building_id, booking_interval_minutes )
-  `)
-      .eq('user_id', uid)
-      .gte('booking_date', startDateStr)
-      .lte('booking_date', endDateStr)
-      .eq('resources.building_id', bid)           // filter by this building
-      .order('booking_date', { ascending: true })
-      .order('time_label', { ascending: true });
-
-    if (bookingsErr) {
-      console.error('bookings fetch error', bookingsErr);
-    }
-
-    setMyBookings(
-      (bookingsData || []).map((bk) => {
-        const start = composeLocalDateTime(bk.booking_date, bk.time_label);
-        const minutes = bk.resources?.booking_interval_minutes || 60;
-        const end = new Date(start.getTime() + minutes * 60000);
-        return {
-          id: bk.id,
-          start_time: start.toISOString(),
-          end_time: end.toISOString(),
-          resource_name: bk.resources?.name ?? 'Resource',
-          type: 'booking',
-        };
-      })
-    );
-
-
-
-    // 4) My maintenance requests
-    // 4) My maintenance requests  ✅ FIX: use user_id (not created_by)
-    const [pendRes, compRes] = await Promise.all([
-      supabase
-        .from('maintenance_requests')
-        .select('*')
-        .eq('building_id', b.id)
-        .eq('user_id', uid)          // <-- changed
-        .eq('status', 'pending')
-        .order('submitted_at', { ascending: false }),
-      supabase
-        .from('maintenance_requests')
-        .select('*')
-        .eq('building_id', b.id)
-        .eq('user_id', uid)          // <-- changed
-        .eq('status', 'completed')
-        .order('updated_at', { ascending: false }),
-    ])
-
-    setMyPending(pendRes?.data || [])
-    setMyCompleted(compRes?.data || [])
-
-  };
 
   useEffect(() => {
-    if (!userId || !buildingId) return;
-    if (loadedForUserRef.current === `${userId}:${buildingId}` && building) return;
+    if (!userId) return;
+    if (loadedForUserRef.current === userId) return;
 
     let canceled = false;
     (async () => {
       setLoading(true);
+      setError(null);
+
       try {
-        await loadDashboard(userId, buildingId);
-        if (!canceled) loadedForUserRef.current = `${userId}:${buildingId}`;
+        const { buildingId, building } = await fetchOwnerBuilding(
+          supabase,
+          userId
+        );
+
+        if (canceled) return;
+
+        if (!buildingId || !building?.id) {
+          setBuilding(null);
+          setAnnouncements([]);
+          setUpcomingBookings([]);
+          setOpenRequests([]);
+          setCounts({ upcomingBookings: 0, openRequests: 0, documents: 0 });
+          loadedForUserRef.current = userId;
+          return;
+        }
+
+        const [a, heroUrl, cts, bookings, requests] = await Promise.all([
+          fetchOwnerAnnouncements(supabase, buildingId),
+          fetchHeroImageUrl(supabase, buildingId),
+          fetchCounts(supabase, { buildingId, userId }),
+          fetchUpcomingBookings(supabase, { buildingId, userId, limit: 5 }),
+          fetchOpenRequests(supabase, { buildingId, userId, limit: 5 }),
+        ]);
+
+        if (canceled) return;
+
+        setAnnouncements(a || []);
+        setBuilding({
+          ...building,
+          hero_image_url: heroUrl ?? building.hero_image_url ?? null,
+        });
+
+        setCounts(cts);
+        setUpcomingBookings(bookings || []);
+        setOpenRequests(requests || []);
+
+        loadedForUserRef.current = userId;
+      } catch (e) {
+        console.error(e);
+        if (!canceled)
+          setError(e?.message || 'Something went wrong loading the dashboard.');
       } finally {
         if (!canceled) setLoading(false);
       }
@@ -204,451 +299,472 @@ export default function OwnerDashboard() {
     return () => {
       canceled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, buildingId, supabase, building]);
+  }, [userId, supabase]);
 
-  // Build schedule (your items only + announcements)
-  const scheduleItems = useMemo(() => {
-    if (!calDate) return [];
+  if (sessionLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center space-y-4">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
+          <p className="text-muted-foreground">Loading session…</p>
+        </div>
+      </div>
+    );
+  }
 
-    const dayStart = new Date(calDate);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(calDate);
-    dayEnd.setHours(23, 59, 59, 999);
+  if (!session) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center space-y-4">
+          <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto" />
+          <p className="text-muted-foreground">Not signed in.</p>
+        </div>
+      </div>
+    );
+  }
 
-    const inDay = (ts) => {
-      const t = new Date(ts);
-      return t >= dayStart && t <= dayEnd;
-    };
-    const fmtHM = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (loading) {
+    return (
+      <div className="absolute top-16 bottom-0 left-16 right-0 bg-background px-4 md:px-6 lg:px-8 py-6 overflow-auto">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <Skeleton className="h-[280px] w-full rounded-2xl" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Skeleton className="h-[140px] rounded-xl" />
+            <Skeleton className="h-[140px] rounded-xl" />
+            <Skeleton className="h-[140px] rounded-xl" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Skeleton className="h-[400px] rounded-xl lg:col-span-2" />
+            <Skeleton className="h-[400px] rounded-xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-    const items = [];
-
-    myBookings
-      .filter((bk) => inDay(bk.start_time))
-      .forEach((bk) =>
-        items.push({
-          id: `bk-${bk.id}`,
-          when: fmtHM(bk.start_time) + (bk.end_time ? `–${fmtHM(bk.end_time)}` : ''),
-          title: `Booking: ${bk.resource_name}`,
-          type: 'booking',
-          href: buildingHref('resources'),
-        })
-      );
-
-    announcements.forEach((a) => {
-      const ts = a.event_date || a.created_at;
-      if (ts && inDay(ts)) {
-        items.push({
-          id: `ann-${a.id}`,
-          when: a.event_date ? fmtHM(a.event_date) : fmtHM(a.created_at),
-          title: `Announcement: ${a.title}`,
-          type: 'announcement',
-          href: buildingHref('announcements'),
-        });
-      }
-    });
-
-    myPending
-      .filter((r) => r.submitted_at && inDay(r.submitted_at))
-      .forEach((r) =>
-        items.push({
-          id: `mp-${r.id}`,
-          when: r.submitted_at ? fmtHM(r.submitted_at) : '—',
-          title: `Maintenance (Pending): ${r.title}`,
-          type: 'maintenance',
-          href: buildingHref('maintenance'),
-        })
-      );
-
-    myCompleted
-      .filter((r) => r.updated_at && inDay(r.updated_at))
-      .forEach((r) =>
-        items.push({
-          id: `mc-${r.id}`,
-          when: fmtHM(r.updated_at),
-          title: `Maintenance (Completed): ${r.title}`,
-          type: 'maintenance',
-          href: buildingHref('maintenance'),
-        })
-      );
-
-    items.sort((a, b) => {
-      const ta = a.when?.slice(0, 5) || '99:99';
-      const tb = b.when?.slice(0, 5) || '99:99';
-      return ta.localeCompare(tb);
-    });
-    return items;
-  }, [calDate, myBookings, announcements, myPending, myCompleted, building]);
-
-  if (sessionLoading) return <p className="p-6">Loading session…</p>;
-  if (!session) return <p className="p-6">You’re not signed in.</p>;
-  if (loading && !building) return <p className="p-6">Loading data…</p>;
+  const buildingId = building?.id;
 
   return (
     <ProtectedRoute allowedRoles={['owner']}>
-      <div className="absolute inset-y-0 left-16 right-0 overflow-auto bg-background p-6 space-y-8">
-        {/* HERO + ANNOUNCEMENTS */}
-        <HeroWithAnnouncements
-          name={building?.name}
-          imageUrl={building?.hero_image_url}
-          announcements={announcements}
-          announcementsHref={buildingHref('announcements')}
-        />
-
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: 2/3 */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* My Bookings */}
-            <Card>
-              <CardHeader className="flex items-center justify-between">
-                <CardTitle>My Amenity Bookings</CardTitle>
-                <Link href={buildingHref('resources')}>
-                  <Button variant="ghost" size="sm">Browse amenities</Button>
-                </Link>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-64 pr-2">
-                  {myBookings.length > 0 ? (
-                    <ul className="space-y-3">
-                      {myBookings.map((bk) => (
-                        <li key={bk.id} className="flex items-start justify-between rounded-md border p-3">
-                          <div>
-                            <div className="font-medium">{bk.resource_name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {new Date(bk.start_time).toLocaleString()} {bk.end_time ? '– ' + new Date(bk.end_time).toLocaleTimeString() : ''}
-                            </div>
-                          </div>
-                          <Badge variant="outline">Upcoming</Badge>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No upcoming bookings.</p>
-                  )}
-                </ScrollArea>
-              </CardContent>
-            </Card>
-
-            {/* Documents (read-only) */}
-            <Card>
-              <CardHeader className="flex items-center justify-between">
-                <Link href={buildingHref('documents')} className="hover:underline">
-                  <CardTitle>Building Documents</CardTitle>
-                </Link>
-                <Link href={buildingHref('documents')}>
-                  <Button variant="ghost" size="sm">View all</Button>
-                </Link>
-              </CardHeader>
-              <CardContent>
-                {/* If your component supports it, pass readOnly to hide upload/rename/delete */}
-                <FolderExplorerCard
-                  buildingId={building?.id}
-                  allDocsHref={buildingHref('documents')}
-                  readOnly
-                />
-              </CardContent>
-            </Card>
+      <div className="absolute top-0 bottom-0 left-16 right-0 bg-background px-4 md:px-6 lg:px-8 py-6 overflow-auto">
+        <div className="w-full mx-auto space-y-4">
+          <div className="absolute inset-0 bg-[url('/abstract-geometric-pattern.png')] opacity-[0.02] bg-cover bg-center" />
+          <div className="relative p-6 md:p-8">
+            <HeroWithAnnouncements
+              imageUrl={building?.hero_image_url}
+              announcements={announcements}
+              announcementsHref={
+                buildingId
+                  ? `/owner/buildings/${buildingId}/announcements`
+                  : '/owner/announcements'
+              }
+            />
           </div>
 
-          {/* Right: 1/3 */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* My maintenance requests */}
-            <Card>
-              <CardHeader className="flex items-center justify-between">
-                <Link href={buildingHref('maintenance')} className="hover:underline">
-                  <CardTitle>My Maintenance Requests</CardTitle>
-                </Link>
-                <Link href={buildingHref('maintenance')}>
-                  <Button variant="ghost" size="sm">Open</Button>
-                </Link>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="pending" className="w-full">
-                  <TabsList>
-                    <TabsTrigger value="pending">Pending</TabsTrigger>
-                    <TabsTrigger value="completed">Completed</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="pending">
-                    <ScrollArea className="h-64">
-                      {myPending.length > 0 ? (
-                        myPending.map((r) => (
-                          <Card key={r.id} className="mb-4 border-l-4 border-destructive">
-                            <CardContent className="space-y-2 pt-4">
-                              <div className="flex justify-between items-center">
-                                <Badge variant="destructive">Pending</Badge>
-                                <p className="text-xs text-muted-foreground">
-                                  {r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : ''}
-                                </p>
-                              </div>
-                              <h3 className="text-lg font-medium">{r.title}</h3>
-                              <p className="text-sm">{r.description}</p>
-                            </CardContent>
-                          </Card>
-                        ))
-                      ) : (
-                        <p className="text-center text-sm text-muted-foreground">No pending requests.</p>
-                      )}
-                    </ScrollArea>
-                  </TabsContent>
-
-                  <TabsContent value="completed">
-                    <ScrollArea className="h-64">
-                      {myCompleted.length > 0 ? (
-                        myCompleted.map((r) => (
-                          <Card key={r.id} className="mb-4 border-l-4 border-primary">
-                            <CardContent className="space-y-2 pt-4">
-                              <div className="flex justify-between items-center">
-                                <Badge variant="outline">Completed</Badge>
-                                <p className="text-xs text-muted-foreground">
-                                  {r.updated_at ? new Date(r.updated_at).toLocaleDateString() : ''}
-                                </p>
-                              </div>
-                              <h3 className="text-lg font-medium">{r.title}</h3>
-                              <p className="text-sm">{r.description}</p>
-                            </CardContent>
-                          </Card>
-                        ))
-                      ) : (
-                        <p className="text-center text-sm text-muted-foreground">No completed requests.</p>
-                      )}
-                    </ScrollArea>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-
-            {/* Schedule (owner-scoped) */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Schedule</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Calendar
-                  mode="single"
-                  selected={calDate}
-                  onSelect={(d) => d && setCalDate(d)}
-                  className="w-full"
-                />
-                <Separator />
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium">
-                      {calDate.toLocaleDateString(undefined, {
-                        weekday: 'long',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </h3>
-                    <Badge variant="secondary">{scheduleItems.length} items</Badge>
-                  </div>
-                  <ScrollArea className="h-40 pr-2">
-                    {scheduleItems.length > 0 ? (
-                      <ul className="space-y-2">
-                        {scheduleItems.map((ev) => (
-                          <li key={ev.id} className="flex items-start gap-2">
-                            <span className="text-xs mt-1 shrink-0 w-14 text-muted-foreground">
-                              {ev.when || '--:--'}
-                            </span>
-                            <div className="flex-1">
-                              <div className="text-sm">{ev.title}</div>
-                              <div className="mt-1">
-                                <Link href={ev.href} className="text-xs underline text-primary">
-                                  Open {labelForType(ev.type)}
-                                </Link>
-                              </div>
-                            </div>
-                            <Badge variant={badgeVariantForType(ev.type)} className="shrink-0">
-                              {labelForType(ev.type)}
-                            </Badge>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No items for this day.</p>
-                    )}
-                  </ScrollArea>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-primary/10">
+                  <Building2 className="h-6 w-6 text-primary" />
                 </div>
-              </CardContent>
-            </Card>
+                <div>
+                  <h2 className="text-3xl font-bold tracking-tight">
+                    {building?.name || 'Your Building'}
+                  </h2>
+                  <p className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
+                    {building?.address || 'Address not set'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                className="gap-2 bg-transparent"
+              >
+                <a
+                  href={
+                    buildingId
+                      ? `/owner/buildings/${buildingId}/documents`
+                      : '/owner/documents'
+                  }
+                >
+                  <FileText className="h-4 w-4" />
+                  Documents
+                  <ArrowUpRight className="h-4 w-4" />
+                </a>
+              </Button>
+
+              <Button
+                asChild
+                size="lg"
+                className="gap-2 bg-primary hover:bg-primary/90"
+              >
+                <a
+                  href={
+                    buildingId
+                      ? `/owner/buildings/${buildingId}/resources`
+                      : '/owner/resources'
+                  }
+                >
+                  <Calendar className="h-4 w-4" />
+                  Book Amenity
+                  <ArrowUpRight className="h-4 w-4" />
+                </a>
+              </Button>
+            </div>
           </div>
-        </section>
+
+          {error ? (
+            <Card className="rounded-xl border-destructive/40 bg-destructive/5">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                  <CardTitle className="text-destructive">
+                    Dashboard Error
+                  </CardTitle>
+                </div>
+                <CardDescription className="text-destructive/80">
+                  {error}
+                </CardDescription>
+              </CardHeader>
+              <CardFooter>
+                <Button
+                  onClick={() => {
+                    loadedForUserRef.current = null;
+                    window.location.reload();
+                  }}
+                  variant="destructive"
+                >
+                  Reload Dashboard
+                </Button>
+              </CardFooter>
+            </Card>
+          ) : null}
+
+          {/* Main grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* LEFT: bookings + maintenance cards */}
+            <div className="lg:col-span-2 space-y-6">
+              <Card className="rounded-xl border-primary/20 shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-4">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <Calendar className="h-4 w-4 text-primary" />
+                      </div>
+                      <CardTitle className="text-xl">
+                        Upcoming Bookings
+                      </CardTitle>
+                    </div>
+                    <CardDescription>
+                      Your next reservations and amenity bookings
+                    </CardDescription>
+                  </div>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 gap-1"
+                  >
+                    <a
+                      href={
+                        buildingId
+                          ? `/owner/buildings/${buildingId}/resources`
+                          : '/owner/resources'
+                      }
+                    >
+                      Create booking <ArrowUpRight className="h-3.5 w-3.5" />
+                    </a>
+                  </Button>
+                </CardHeader>
+
+                <CardContent className="space-y-3">
+                  {upcomingBookings?.length ? (
+                    upcomingBookings.map((b, idx) => (
+                      <div
+                        key={b.id}
+                        className="group flex items-start justify-between gap-4 rounded-xl border border-border/50 p-4 hover:border-primary/30 hover:bg-primary/5 transition-all"
+                      >
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <p className="font-semibold truncate text-foreground">
+                              {b?.resource?.name || 'Booking'}
+                            </p>
+
+                            {b?.status ? (
+                              <Badge
+                                variant={
+                                  b.status === 'confirmed'
+                                    ? 'default'
+                                    : 'secondary'
+                                }
+                                className="capitalize font-medium"
+                              >
+                                {String(b.status).replaceAll('_', ' ')}
+                              </Badge>
+                            ) : null}
+
+                            {b?.purpose ? (
+                              <Badge variant="outline" className="capitalize">
+                                {String(b.purpose).replaceAll('_', ' ')}
+                              </Badge>
+                            ) : null}
+                          </div>
+
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            {formatDateTime(b.start_time)} →{' '}
+                            {formatDateTime(b.end_time)}
+                          </p>
+
+                          {b?.notes ? (
+                            <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-2 truncate">
+                              {b.notes}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <Button
+                          asChild
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 gap-1 group-hover:border-primary/50 bg-transparent"
+                        >
+                          <a
+                            href={
+                              buildingId
+                                ? `/owner/buildings/${buildingId}/bookings`
+                                : '/owner/bookings'
+                            }
+                          >
+                            View <ArrowUpRight className="h-3.5 w-3.5" />
+                          </a>
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-border p-8 text-center space-y-3">
+                      <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                        <Calendar className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">
+                          No upcoming bookings
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Book an amenity to get started
+                        </p>
+                      </div>
+                      <Button asChild size="sm" className="mt-2">
+                        <a
+                          href={
+                            buildingId
+                              ? `/owner/buildings/${buildingId}/resources`
+                              : '/owner/resources'
+                          }
+                        >
+                          Create Booking
+                        </a>
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-xl border-purple-500/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-purple-500/5 to-background">
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-purple-500/10">
+                      <Gift className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl">Rewards </CardTitle>
+                      <CardDescription>
+                        Exclusive discounts for residents
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="group rounded-xl border border-purple-500/20 p-4 hover:border-purple-500/40 hover:bg-purple-500/5 transition-all">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                          <p className="font-semibold text-foreground">
+                            SparkleClean
+                          </p>
+                          <Badge className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20">
+                            15% off
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Professional condo cleaning services
+                        </p>
+                        <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">
+                          Valid for residents • Limited time offer
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="group rounded-xl border border-orange-500/20 p-4 hover:border-orange-500/40 hover:bg-orange-500/5 transition-all">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex items-center gap-2">
+                          <Gift className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                          <p className="font-semibold text-foreground">
+                            Joe's Café
+                          </p>
+                          <Badge className="bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20">
+                            Free coffee
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Free coffee with breakfast purchase
+                        </p>
+                        <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">
+                          2 blocks away • Show resident ID
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="flex justify-end pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    disabled
+                    className="gap-2 bg-transparent"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    View All Offers
+                  </Button>
+                </CardFooter>
+              </Card>
+
+              <Card className="rounded-xl border-orange-500/20 shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-4">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-lg bg-orange-500/10">
+                        <Wrench className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                      </div>
+                      <CardTitle className="text-xl">
+                        Maintenance Requests
+                      </CardTitle>
+                    </div>
+                    <CardDescription>
+                      Track your service requests and updates
+                    </CardDescription>
+                  </div>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 gap-1"
+                  >
+                    <a
+                      href={
+                        buildingId
+                          ? `/owner/buildings/${buildingId}/requests/new`
+                          : '/owner/requests/new'
+                      }
+                    >
+                      Create request <ArrowUpRight className="h-3.5 w-3.5" />
+                    </a>
+                  </Button>
+                </CardHeader>
+
+                <CardContent className="space-y-3">
+                  {openRequests?.length ? (
+                    openRequests.map((r) => (
+                      <div
+                        key={r.id}
+                        className="group flex items-start justify-between gap-4 rounded-xl border border-border/50 p-4 hover:border-orange-500/30 hover:bg-orange-500/5 transition-all"
+                      >
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Wrench className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <p className="font-semibold truncate text-foreground">
+                              {r.title || 'Request'}
+                            </p>
+                            {r?.status ? (
+                              <Badge
+                                variant={
+                                  r.status === 'in_progress'
+                                    ? 'default'
+                                    : 'secondary'
+                                }
+                                className="capitalize font-medium"
+                              >
+                                {String(r.status).replaceAll('_', ' ')}
+                              </Badge>
+                            ) : null}
+                          </div>
+
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            Submitted {formatDateTime(r.submitted_at)}
+                            {r.updated_at && r.updated_at !== r.submitted_at
+                              ? ` • Updated ${formatDateTime(r.updated_at)}`
+                              : ''}
+                          </p>
+                        </div>
+
+                        <Button
+                          asChild
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 gap-1 group-hover:border-orange-500/50 bg-transparent"
+                        >
+                          <a
+                            href={
+                              buildingId
+                                ? `/owner/buildings/${buildingId}/requests`
+                                : '/owner/requests'
+                            }
+                          >
+                            View <ArrowUpRight className="h-3.5 w-3.5" />
+                          </a>
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-border p-8 text-center space-y-3">
+                      <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                        <CheckCircle2 className="h-6 w-6 text-green-500" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">
+                          All clear!
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          No open maintenance requests
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* RIGHT: schedule + additional info */}
+            <div className="space-y-6">
+              {/* Schedule (moved to right column) */}
+              <ScheduleCard
+                building={building}
+                announcements={announcements}
+                pending={openRequests}
+                completed={[]}
+                bookings={upcomingBookings}
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </ProtectedRoute>
   );
-}
-
-/* =================== Hero with announcements inside the hero =================== */
-function HeroWithAnnouncements({ name, imageUrl, announcements, announcementsHref }) {
-  const hasDeck = (announcements?.length ?? 0) > 0;
-  return (
-    <section
-      className={[
-        "relative z-10",
-        hasDeck ? "mb-[13rem] md:mb-[10rem] lg:mb-[13rem]" : ""
-      ].join(" ")}
-    >
-      <BuildingHero name={name} imageUrl={imageUrl}>
-        <AnnouncementsDeck items={announcements} href={announcementsHref} />
-      </BuildingHero>
-    </section>
-  );
-}
-
-/* ---------- Building hero (solid brand blue or image), name on top, deck below ---------- */
-function BuildingHero({ name, imageUrl, children }) {
-  const hasImage = Boolean(imageUrl);
-  const hasDeck = Boolean(children);
-  const heightClass = hasImage
-    ? hasDeck ? 'h-80 md:h-96' : 'h-48 md:h-64'
-    : hasDeck ? 'h-64 md:h-72 bg-primary' : 'h-40 md:h-48 bg-primary';
-
-  return (
-    <div className="relative">
-      <div
-        className={['relative rounded-xl overflow-hidden', heightClass].join(' ')}
-        style={
-          hasImage
-            ? { backgroundImage: `url(${imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-            : undefined
-        }
-      >
-        {hasImage && <div className="absolute inset-0 bg-black/35" />}
-        <div className="absolute top-12 left-0 right-0 flex justify-center">
-          <h1 className="text-white text-5xl md:text-7xl font-bold uppercase tracking-widest drop-shadow">
-            {name || '—'}
-          </h1>
-        </div>
-      </div>
-      <div className="absolute left-1/2 top-[100%] -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl px-3 sm:px-4 z-30">
-
-        {children}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Announcements deck (same as manager) ---------- */
-function AnnouncementsDeck({ items, href }) {
-  const [index, setIndex] = useState(0);
-
-  useEffect(() => {
-    if (!items || items.length <= 1) return;
-    const id = setInterval(() => setIndex((i) => (i + 1) % items.length), 6000);
-    return () => clearInterval(id);
-  }, [items]);
-
-  if (!items || items.length === 0) return null;
-
-  const active = items[index];
-  const hasImg = Boolean(active?.image_url);
-
-  const formattedDate = active?.event_date
-    ? new Date(active.event_date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
-    : null;
-
-  const fontColor = active?.text_color || (hasImg ? '#ffffff' : undefined);
-  const solidBg = !hasImg && (active?.banner_bg_color || undefined);
-  const overlayRGBA =
-    hasImg && active?.overlay_color && typeof active?.overlay_opacity === 'number'
-      ? hexWithAlpha(active.overlay_color, Math.max(0, Math.min(100, active.overlay_opacity)))
-      : hasImg
-        ? 'rgba(0,0,0,0.45)'
-        : undefined;
-
-  const subtitle =
-    active?.subtitle ??
-    (active?.message ? (active.message.length > 140 ? active.message.slice(0, 137) + '…' : active.message) : '');
-
-  return (
-    <Link href={href} className="block">
-      <div
-        className={[
-          'relative rounded-2xl shadow-2xl ring-1 ring-black/10 border overflow-hidden backdrop-blur-[1px]',
-          !hasImg && !solidBg ? 'bg-primary text-primary-foreground' : '',
-          'h-[18rem] md:h-[20rem] lg:h-[22rem]',
-        ].join(' ')}
-        style={
-          hasImg
-            ? { backgroundImage: `url(${active.image_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-            : solidBg
-              ? { backgroundColor: solidBg }
-              : undefined
-        }
-      >
-        {hasImg && <div className="absolute inset-0" style={{ backgroundColor: overlayRGBA }} />}
-        <div className="relative h-full w-full px-4 md:px-6 flex items-center justify-between">
-          <div style={{ color: fontColor }}>
-            <div className="text-xs md:text-sm uppercase opacity-80">Announcement</div>
-            <div className="text-2xl md:text-3xl font-bold leading-tight line-clamp-1">{active?.title}</div>
-            {subtitle && <div className="text-sm md:text-base/6 opacity-90 line-clamp-2">{subtitle}</div>}
-            {formattedDate && <div className="text-xs md:text-sm opacity-80 mt-1">{formattedDate}</div>}
-          </div>
-          {items.length > 1 && (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                aria-label="Previous"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setIndex((i) => (i - 1 + items.length) % items.length);
-                }}
-                className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/85 hover:bg-white"
-              >
-                <ChevronLeft className="h-4 w-4 text-gray-700" />
-              </button>
-              <button
-                type="button"
-                aria-label="Next"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setIndex((i) => (i + 1) % items.length);
-                }}
-                className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/85 hover:bg-white"
-              >
-                <ChevronRight className="h-4 w-4 text-gray-700" />
-              </button>
-            </div>
-          )}
-        </div>
-        {items.length > 1 && (
-          <div className="absolute bottom-1 left-0 right-0 flex items-center justify-center gap-1">
-            {items.map((_, i) => (
-              <span
-                key={i}
-                className={['h-1.5 rounded-full transition-all', i === index ? 'w-4 bg-white' : 'w-2 bg-white/60'].join(' ')}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </Link>
-  );
-}
-
-/* --- schedule label helpers --- */
-function labelForType(type) {
-  switch (type) {
-    case 'booking':
-      return 'Resources';
-    case 'announcement':
-      return 'Announcements';
-    case 'maintenance':
-      return 'Maintenance';
-    default:
-      return 'Item';
-  }
-}
-function badgeVariantForType(type) {
-  switch (type) {
-    case 'booking':
-      return 'outline';
-    case 'announcement':
-      return 'secondary';
-    case 'maintenance':
-      return 'destructive';
-    default:
-      return 'secondary';
-  }
 }

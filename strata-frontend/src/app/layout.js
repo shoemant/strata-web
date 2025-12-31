@@ -2,7 +2,6 @@ import "@/styles/globals.css"
 import { createServerClient } from "@supabase/ssr"
 import { cookies as getCookies } from "next/headers"
 import ClientWrapper from "./client-wrapper"
-import NavBar from "@/components/NavBar"
 import { ThemeProvider } from "@/components/theme-provider"
 
 export const metadata = {
@@ -38,7 +37,7 @@ export default async function RootLayout({ children }) {
   if (user) {
     const { data: profile } = await supabase
       .from("user_profiles")
-      .select("role, building_id")
+      .select("role")
       .eq("id", user.id)
       .single()
 
@@ -47,23 +46,34 @@ export default async function RootLayout({ children }) {
     if (role === "manager") {
       const { data: managerBuildings } = await supabase
         .from("manager_buildings")
-        .select("building_id, buildings(name, id)")
+        .select("buildings:building_id(id, name, address, hero_image_url)")
         .eq("user_id", user.id)
 
       buildings = (managerBuildings || [])
         .map((row) => row?.buildings)
         .filter(Boolean)
-    } else if ((role === "tenant" || role === "owner") && profile?.building_id) {
-      const { data: b } = await supabase
-        .from("buildings")
-        .select("id, name")
-        .eq("id", profile.building_id)
-        .single()
-      if (b) buildings = [b]
+    }
+
+    if (role === "tenant" || role === "owner") {
+      const { data: memberships } = await supabase
+        .from("memberships")
+        .select("buildings:building_id(id, name, address, hero_image_url)")
+        .eq("user_id", user.id)
+        .in("status", ["active", "invited", "scheduled"])
+
+      const rawBuildings = (memberships || [])
+        .map((m) => m.buildings)
+        .filter(Boolean)
+
+      const seen = new Set()
+      buildings = rawBuildings.filter((b) => {
+        const key = String(b.id)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
     }
   }
-
-  const showNav = Boolean(user && role)
 
   return (
     <html lang="en" suppressHydrationWarning>

@@ -1,16 +1,14 @@
-'use client';
+"use client"
 
-import SupabaseProvider from '@/components/SupabaseProvider';
-import { UserContextProvider } from '@/context/UserContextProvider'; // 🔄 new dynamic provider
-import NavBar from '@/components/NavBar';
+import SupabaseProvider from "@/components/SupabaseProvider"
+import { UserContextProvider } from "@/context/UserContextProvider"
 
-export default function ClientWrapper({ children }) {
+export default function ClientWrapper({ children, user, role, buildings }) {
   return (
     <SupabaseProvider>
-      <UserContextProvider>
-        <NavBar />
-        <main>{children}</main>
+      <UserContextProvider user={user} role={role} buildings={buildings}>
+        {children}
       </UserContextProvider>
     </SupabaseProvider>
-  );
+  )
 }

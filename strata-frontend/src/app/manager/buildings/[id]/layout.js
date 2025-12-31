@@ -1,4 +1,3 @@
-// app/manager/layout.tsx (or wherever this file lives)
 'use client'
 
 import { createContext, useMemo } from 'react'
