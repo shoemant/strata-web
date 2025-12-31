@@ -94,7 +94,7 @@ function getBuildingNav(role, buildingId) {
       {
         href: `/manager/buildings/${buildingId}/resources`,
         icon: Box,
-        label: 'Amenities',
+        label: 'Bookings',
       },
       {
         href: `/manager/buildings/${buildingId}/features`,

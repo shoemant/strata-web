@@ -29,7 +29,7 @@ export default function NewResourcePage() {
 
   return (
     <main className="p-6 max-w-xl mx-auto">
-      <h1 className="text-2xl font-semibold mb-4">Create resource</h1>
+      <h1 className="text-2xl font-semibold mb-4">Create amenity</h1>
       <ResourceForm onSave={handleSubmit} buildingId={buildingId} />
     </main>
   );

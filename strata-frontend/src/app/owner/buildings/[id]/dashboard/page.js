@@ -583,7 +583,7 @@ export default function OwnerDashboard() {
                       <Gift className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                     </div>
                     <div>
-                      <CardTitle className="text-xl">Rewards </CardTitle>
+                      <CardTitle className="text-xl">Offers </CardTitle>
                       <CardDescription>
                         Exclusive discounts for residents
                       </CardDescription>
