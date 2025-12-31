@@ -4,7 +4,6 @@ const dotenv = require('dotenv');
 
 const authRoutes = require('./routes/auth.js');
 const inviteRoutes = require('./routes/invite.js');
-const documents = require('./routes/documents.js');
 const resourceTypeRoutes = require('./routes/resourceTypes.js');
 const checkUser = require('./routes/checkUser.js');
 const resources = require('./routes/resources.js');
@@ -26,7 +25,6 @@ app.use(express.json());
 // Route groups
 app.use('/api', authRoutes);
 app.use('/api/invite', inviteRoutes);
-app.use('/api/documents', documents);
 app.use('/api/resource-types', resourceTypeRoutes);
 app.use('/api/check-user', checkUser);
 app.use('/api/resources', resources);
