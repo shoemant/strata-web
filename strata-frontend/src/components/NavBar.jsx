@@ -54,13 +54,8 @@ function getRestPathAfterBuildingId(pathname) {
 function getGlobalNav(role) {
   return (
     {
-      manager: [
-        { href: '/manager/profile', icon: User, label: 'Profile' },
-        { href: '/manager/invite', icon: UserPlus, label: 'Invite Users' },
-      ],
-      admin: [
-        { href: '/admin/add-building', icon: Building2, label: 'Add Building' },
-      ],
+      manager: [],
+      admin: [],
       owner: [], // owner items live under active building
       tenant: [
         // Keep only truly global tenant items here.
@@ -76,6 +71,16 @@ function getBuildingNav(role, buildingId) {
 
   if (role === 'manager') {
     return [
+      {
+        href: `/manager/buildings/${buildingId}/profile`,
+        icon: User,
+        label: 'Profile',
+      },
+      {
+        href: `/manager/buildings/${buildingId}/invite`,
+        icon: UserPlus,
+        label: 'Invite',
+      },
       {
         href: `/manager/buildings/${buildingId}/dashboard`,
         icon: LayoutDashboard,
