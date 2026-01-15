@@ -4,15 +4,13 @@ import { supabase } from '@/utils/supabase/client';
 export async function checkEmailForAccount(email) {
   const trimmed = email.trim().toLowerCase();
 
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('id, role')
-    .eq('email', trimmed)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('check_email_for_account', {
+    p_email: trimmed,
+  });
 
-  if (error && error.code !== 'PGRST116') throw error;
+  if (error) throw error;
 
-  return { exists: !!data, email: trimmed };
+  return { exists: !!data?.[0]?.account_exists, email: trimmed };
 }
 
 export async function getPendingInviteRole(email) {
