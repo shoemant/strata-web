@@ -27,27 +27,34 @@ export async function middleware(request) {
     }
   );
 
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-
   const publicPaths = [
     '/login',
     '/login/password',
+
+    // ✅ terms gating flow
+    '/accept-terms',
+    '/terms',
+    '/privacy',
+
+    // legacy / unused but kept
     '/signup',
     '/signup/tenant',
     '/signup/owner',
     '/signup/manager',
     '/forgot-password',
     '/auth/callback',
+
+    // public images
     '/images/apartment.svg',
     '/images/logo.png',
     '/images/logo-compact.png',
     '/images/logo-cropped.png',
     '/images/apartment-dark.svg',
-    '/images/apartment-dark-rescaled.svg'
+    '/images/apartment-dark-rescaled.svg',
   ];
 
   const { pathname } = request.nextUrl;

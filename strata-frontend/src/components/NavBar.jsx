@@ -20,6 +20,7 @@ import {
 import {
   LayoutDashboard,
   User,
+  Users,
   FileText,
   Box,
   LogOut,
@@ -100,6 +101,11 @@ function getBuildingNav(role, buildingId) {
         href: `/manager/buildings/${buildingId}/resources`,
         icon: Box,
         label: 'Bookings',
+      },
+      {
+        href: `/manager/buildings/${buildingId}/residents`,
+        icon: Users,
+        label: 'Residents',
       },
       {
         href: `/manager/buildings/${buildingId}/features`,

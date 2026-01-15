@@ -5,18 +5,15 @@ import PropTypes from 'prop-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { AlertCircle, CheckCircle2, Send } from 'lucide-react';
 
-/**
- * Props:
- * - supabase
- * - session
- * - buildingId (string)                // optional initial/default building id
- * - buildings (Array<{ id, name?, address? }>)
- * - onSuccess?: (msg?: string) => void
- * - onError?: (msg?: string) => void
- */
 export default function InviteForm({
   supabase,
   session,
@@ -31,31 +28,22 @@ export default function InviteForm({
   const [sendingInvite, setSendingInvite] = useState(false);
   const [status, setStatus] = useState({ ok: null, msg: '' });
 
-  // building selection
   const [selectedBuildingId, setSelectedBuildingId] = useState(null);
   const multiBuilding = (buildings?.length || 0) > 1;
 
-  // units for the currently selected building
   const [units, setUnits] = useState([]);
   const [loadingUnits, setLoadingUnits] = useState(false);
 
-  // initialize selected building
   useEffect(() => {
-    if (multiBuilding) {
-      // prefer explicit initialBuildingId if valid, else first building
-      const preferred =
-        (initialBuildingId && buildings.find(b => b.id === initialBuildingId)?.id) ||
-        buildings[0]?.id ||
-        null;
-      setSelectedBuildingId(preferred);
-    } else {
-      // 0 or 1 building in list: if provided use it; else fallback to initialBuildingId
-      const only = buildings[0]?.id || (initialBuildingId ? initialBuildingId : null);
-      setSelectedBuildingId(only);
-    }
+    const preferred =
+      (initialBuildingId &&
+        buildings.find((b) => b.id === initialBuildingId)?.id) ||
+      buildings[0]?.id ||
+      (initialBuildingId ? initialBuildingId : null);
+
+    setSelectedBuildingId(preferred || null);
   }, [multiBuilding, buildings, initialBuildingId]);
 
-  // load units whenever building changes
   useEffect(() => {
     (async () => {
       if (!selectedBuildingId) {
@@ -64,6 +52,7 @@ export default function InviteForm({
         return;
       }
       setLoadingUnits(true);
+
       const { data, error } = await supabase
         .from('units')
         .select('id,label,floor')
@@ -76,9 +65,10 @@ export default function InviteForm({
         setInviteUnitId('none');
       } else {
         setUnits(data || []);
-        // if current selected unit doesn't belong to new building, reset it
-        setInviteUnitId(prev =>
-          prev !== 'none' && !(data || []).some(u => u.id === prev) ? 'none' : prev
+        setInviteUnitId((prev) =>
+          prev !== 'none' && !(data || []).some((u) => u.id === prev)
+            ? 'none'
+            : prev
         );
       }
       setLoadingUnits(false);
@@ -87,16 +77,14 @@ export default function InviteForm({
 
   const unitRequired = inviteRole === 'tenant' || inviteRole === 'owner';
 
-  const roleBadge = useMemo(
-    () => (r) =>
-      ({
-        manager: 'bg-blue-100 text-blue-800',
-        owner: 'bg-amber-100 text-amber-800',
-        tenant: 'bg-emerald-100 text-emerald-800',
-        admin: 'bg-purple-100 text-purple-800',
-      }[r] ?? 'bg-muted text-foreground'),
-    []
+  const buildingLabel = (b) => b?.name || b?.address || b?.id || 'Building';
+  const selectedBuildingObj = buildings.find(
+    (b) => b.id === selectedBuildingId
   );
+
+  function isValidEmail(v) {
+    return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
+  }
 
   async function handleSendInvite(e) {
     e.preventDefault();
@@ -110,12 +98,13 @@ export default function InviteForm({
     }
 
     const email = inviteEmail.trim().toLowerCase();
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    if (!email || !isValidEmail(email)) {
       const msg = 'Please enter a valid email.';
       setStatus({ ok: false, msg });
       onError?.(msg);
       return;
     }
+
     if (unitRequired && (!inviteUnitId || inviteUnitId === 'none')) {
       const msg = 'Select a unit for owners/tenants.';
       setStatus({ ok: false, msg });
@@ -125,42 +114,66 @@ export default function InviteForm({
 
     setSendingInvite(true);
     try {
-      const token = `${(crypto.randomUUID && crypto.randomUUID()) || Math.random().toString(36).slice(2)}-${Math.random()
-        .toString(36)
-        .slice(2, 10)}`;
-      const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+      // 1) Create/rotate invite in DB via RPC
+      const { data: created, error: createErr } = await supabase.rpc(
+        'create_invite',
+        {
+          p_email: email,
+          p_role: inviteRole,
+          p_building_id: selectedBuildingId,
+          p_unit_id: unitRequired ? inviteUnitId : null,
+          p_note: null,
+        }
+      );
 
-      const { data: ins, error: insErr } = await supabase
-        .from('invitations')
-        .insert({
-          email,
-          role: inviteRole,
-          building_id: selectedBuildingId,
-          unit_id: unitRequired ? inviteUnitId : null,
-          token,
-          invited_by: session?.user?.id ?? null,
-          status: 'pending',
-          expires_at: expiresAt,
-        })
-        .select('id')
-        .single();
-
-      if (insErr) {
-        const msg =
-          insErr.code === '23505'
-            ? 'There is already a pending invite for this email.'
-            : 'Failed to create invitation.';
+      if (createErr) {
+        console.error('create_invite error:', createErr);
+        const msg = createErr.message || 'Failed to create invitation.';
         setStatus({ ok: false, msg });
         onError?.(msg);
         return;
       }
 
-      // Fire-and-forget email
-      const { error: sendErr } = await supabase.functions.invoke('send-invite-email', {
-        body: { invitation_id: ins?.id },
-      });
+      const row = Array.isArray(created) ? created[0] : created;
+      const expiresAt = row?.expires_at ?? null;
+      const token = row?.token;
+
+      if (!token) {
+        const msg = 'Invite created, but token was not returned.';
+        setStatus({ ok: false, msg });
+        onError?.(msg);
+        return;
+      }
+
+      // 2) Send email (Edge Function / backend)
+      const unitLabel =
+        unitRequired && inviteUnitId !== 'none'
+          ? (units.find((u) => u.id === inviteUnitId)?.label ?? null)
+          : null;
+
+      const { error: sendErr } = await supabase.functions.invoke(
+        'send-invite-email',
+        {
+          body: {
+            email,
+            role: inviteRole,
+            building_id: selectedBuildingId,
+            building_label: selectedBuildingObj
+              ? buildingLabel(selectedBuildingObj)
+              : selectedBuildingId,
+            unit_id: unitRequired ? inviteUnitId : null,
+            unit_label: unitLabel,
+            token,
+            expires_at: expiresAt,
+          },
+        }
+      );
+
       if (sendErr) {
-        console.warn('send-invite-email failed (invite created anyway):', sendErr);
+        console.warn(
+          'send-invite-email failed (invite created anyway):',
+          sendErr
+        );
       }
 
       const msg = 'Invitation created.';
@@ -173,15 +186,9 @@ export default function InviteForm({
     }
   }
 
-  // small helper to show one-line building label
-  const buildingLabel = (b) => (b?.name || b?.address || b?.id || 'Building');
-
-  const selectedBuildingObj = buildings.find(b => b.id === selectedBuildingId);
-
   return (
     <form onSubmit={handleSendInvite} className="space-y-4">
       <div className="grid grid-cols-1 gap-3">
-        {/* Building picker (dropdown if multiple, read-only otherwise) */}
         <div className="space-y-2">
           <Label>Building</Label>
           {multiBuilding ? (
@@ -203,7 +210,11 @@ export default function InviteForm({
           ) : (
             <Input
               readOnly
-              value={selectedBuildingObj ? buildingLabel(selectedBuildingObj) : 'No building assigned'}
+              value={
+                selectedBuildingObj
+                  ? buildingLabel(selectedBuildingObj)
+                  : 'No building assigned'
+              }
             />
           )}
         </div>
@@ -239,7 +250,7 @@ export default function InviteForm({
             {unitRequired ? (
               <span className="text-destructive">*</span>
             ) : (
-              <span className="text-muted-foreground">(optional)</span>
+              <span className="text-muted-foreground">(not required)</span>
             )}
           </Label>
           <Select
@@ -253,7 +264,9 @@ export default function InviteForm({
             }
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder={loadingUnits ? 'Loading units…' : 'Select a unit'} />
+              <SelectValue
+                placeholder={loadingUnits ? 'Loading units…' : 'Select a unit'}
+              />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">— No unit —</SelectItem>
@@ -273,6 +286,7 @@ export default function InviteForm({
           <Send className="mr-2 h-4 w-4" />
           {sendingInvite ? 'Sending…' : 'Send Invite'}
         </Button>
+
         {status.ok === true && (
           <span className="inline-flex items-center text-green-600 text-sm">
             <CheckCircle2 className="h-4 w-4 mr-1" />

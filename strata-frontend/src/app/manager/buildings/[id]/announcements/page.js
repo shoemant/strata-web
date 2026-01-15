@@ -359,7 +359,7 @@ export default function AnnouncementsPage() {
   };
 
   return (
-    <div className="absolute inset-y-0 left-16 right-0  bg-background p-6 space-y-12">
+    <div className="absolute left-16 right-0 top-16 bottom-0 bg-background p-6 space-y-12 overflow-auto">
       {/* Floating success/error banner */}
       {banner && (
         <div
@@ -379,18 +379,6 @@ export default function AnnouncementsPage() {
           </div>
         </div>
       )}
-
-      <div className="flex justify-end">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={fetchAnnouncements}
-          disabled={loading}
-        >
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
-      </div>
 
       {/* Presets Picker */}
       <Card>

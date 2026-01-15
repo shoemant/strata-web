@@ -1,7 +1,9 @@
-"use client";
+'use client';
 
-import { motion } from "framer-motion";
-import { Spinner } from "@/components/ui/spinner";
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+import { Spinner } from '@/components/ui/spinner';
 
 export default function SignupStep({
   direction,
@@ -18,23 +20,42 @@ export default function SignupStep({
   goToStep,
   handleSignupSubmit,
   resendConfirmation,
+  termsVersion,
 }) {
+  const [agreed, setAgreed] = useState(false);
+  const [termsError, setTermsError] = useState('');
+
+  const canSubmit = useMemo(() => {
+    return Boolean(password) && agreed && !signupSending;
+  }, [password, agreed, signupSending]);
+
+  const onSubmit = (e) => {
+    if (!agreed) {
+      e.preventDefault();
+      setTermsError('You must agree to the Terms & Conditions to continue.');
+      return;
+    }
+    setTermsError('');
+    handleSignupSubmit(e);
+  };
+
   return (
     <motion.div
       key="signup"
       initial={{ opacity: 0, x: direction * 100 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: direction * -100 }}
-      transition={{ duration: 0.3, ease: "easeInOut" }}
+      transition={{ duration: 0.3, ease: 'easeInOut' }}
       className="space-y-6"
     >
-      {/* BEFORE signup */}
       {!signupSent && (
-        <form onSubmit={handleSignupSubmit} className="space-y-6">
-          <h2 className="text-2xl font-bold text-center">Create your account</h2>
+        <form onSubmit={onSubmit} className="space-y-6">
+          <h2 className="text-2xl font-bold text-center">
+            Create your account
+          </h2>
 
           <p className="text-center text-muted-foreground dark:text-neutral-400">
-            You’ve been invited as a <strong>{invite || "user"}</strong>
+            You’ve been invited as a <strong>{invite || 'user'}</strong>
           </p>
 
           <input
@@ -58,12 +79,64 @@ export default function SignupStep({
                        dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
           />
 
-          {error && <p className="text-destructive dark:text-red-400 text-sm">{error}</p>}
+          {/* ✅ Terms checkbox with real Next.js links */}
+          <div className="space-y-2">
+            <label className="flex items-start gap-3 text-sm text-foreground/80 dark:text-neutral-300">
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={(e) => {
+                  setAgreed(e.target.checked);
+                  if (e.target.checked) setTermsError('');
+                }}
+                disabled={signupSending}
+                className="mt-1 h-4 w-4 rounded border border-input"
+              />
+              <span>
+                I agree to the{' '}
+                <Link
+                  href="/terms"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  Terms & Conditions
+                </Link>{' '}
+                {termsVersion ? (
+                  <span className="text-xs text-muted-foreground">
+                    (version {termsVersion})
+                  </span>
+                ) : null}{' '}
+                and acknowledge the{' '}
+                <Link
+                  href="/privacy"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </span>
+            </label>
+
+            {termsError ? (
+              <p className="text-destructive dark:text-red-400 text-sm">
+                {termsError}
+              </p>
+            ) : null}
+          </div>
+
+          {error && (
+            <p className="text-destructive dark:text-red-400 text-sm">
+              {error}
+            </p>
+          )}
 
           <motion.button
             whileTap={{ scale: 0.95 }}
             type="submit"
-            disabled={signupSending}
+            disabled={!canSubmit}
             className="w-full py-2 rounded bg-primary text-primary-foreground hover:bg-primary/80 
                        transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
@@ -72,18 +145,26 @@ export default function SignupStep({
                 <Spinner className="h-5 w-5" /> Sending…
               </>
             ) : (
-              "Sign Up"
+              'Sign Up'
             )}
           </motion.button>
 
           {signupMsg && (
-            <p className="text-sm text-foreground/70 dark:text-neutral-300 text-center" aria-live="polite">
+            <p
+              className="text-sm text-foreground/70 dark:text-neutral-300 text-center"
+              aria-live="polite"
+            >
               {signupMsg}
             </p>
           )}
 
           <div className="text-sm text-primary text-center">
-            <button type="button" onClick={() => goToStep("email")} disabled={signupSending} className="hover:underline">
+            <button
+              type="button"
+              onClick={() => goToStep('email')}
+              disabled={signupSending}
+              className="hover:underline"
+            >
               ← Back
             </button>
           </div>
@@ -99,21 +180,37 @@ export default function SignupStep({
           aria-live="assertive"
         >
           <div className="mx-auto h-14 w-14 rounded-full bg-blue-600 text-white grid place-items-center shadow">
-            <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-7 w-7"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M4 6h16v12H4z" />
               <path d="m22 6-10 7L2 6" />
             </svg>
           </div>
 
-          <h3 className="text-xl font-bold text-blue-900 dark:text-blue-200">Check your email</h3>
+          <h3 className="text-xl font-bold text-blue-900 dark:text-blue-200">
+            Check your email
+          </h3>
 
           <p className="text-blue-900/80 dark:text-blue-200/80">
-            We’ve sent a confirmation link to <strong className="font-semibold">{email}</strong>.
-            <br />Click the link to verify your account.
+            We’ve sent a confirmation link to{' '}
+            <strong className="font-semibold">{email}</strong>.
+            <br />
+            Click the link to verify your account.
           </p>
 
           {resendMsg.msg && (
-            <p className={resendMsg.ok ? "text-green-700 dark:text-green-300 text-sm" : "text-red-600 dark:text-red-400 text-sm"}>
+            <p
+              className={
+                resendMsg.ok
+                  ? 'text-green-700 dark:text-green-300 text-sm'
+                  : 'text-red-600 dark:text-red-400 text-sm'
+              }
+            >
               {resendMsg.msg}
             </p>
           )}
@@ -127,11 +224,11 @@ export default function SignupStep({
                          dark:hover:bg-blue-900/30 transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {resendBusy ? <Spinner className="h-5 w-5" /> : null}
-              {resendBusy ? "Resending…" : "Resend email"}
+              {resendBusy ? 'Resending…' : 'Resend email'}
             </button>
 
             <button
-              onClick={() => goToStep("email")}
+              onClick={() => goToStep('email')}
               className="w-full py-2 rounded-lg border text-blue-700 dark:text-blue-300 bg-white 
                          dark:bg-transparent hover:bg-gray-50 dark:hover:bg-white/5 transition"
             >

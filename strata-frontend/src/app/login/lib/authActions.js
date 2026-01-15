@@ -1,109 +1,141 @@
 // app/login/lib/authActions.js
-import { supabase } from "@/utils/supabase/client";
-import { redirect } from "next/navigation";
+import { supabase } from '@/utils/supabase/client';
 
 export async function checkEmailForAccount(email) {
-    const trimmed = email.trim().toLowerCase();
+  const trimmed = email.trim().toLowerCase();
 
-    // Check if user exists
-    const { data, error } = await supabase
-        .from("user_profiles")
-        .select("id, role")
-        .eq("email", trimmed)
-        .maybeSingle();
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('id, role')
+    .eq('email', trimmed)
+    .maybeSingle();
 
-    if (error && error.code !== "PGRST116") throw error;
+  if (error && error.code !== 'PGRST116') throw error;
 
-    return { exists: !!data, email: trimmed };
+  return { exists: !!data, email: trimmed };
 }
 
 export async function getPendingInviteRole(email) {
-    const { data } = await supabase
-        .from("invitations")
-        .select("role")
-        .eq("email", email)
-        .eq("status", "pending")
-        .maybeSingle();
+  const { data } = await supabase
+    .from('invitations')
+    .select('role')
+    .eq('email', email)
+    .eq('status', 'pending')
+    .maybeSingle();
 
-    return data?.role ?? null;
+  return data?.role ?? null;
 }
 
-export async function signInWithPassword(email, password, rememberMe) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+export async function signInWithPassword(
+  email,
+  password,
+  rememberMe,
+  termsVersion
+) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (error) throw error;
 
-    if (data.session) {
-        await supabase.auth.setSession({
-            access_token: data.session.access_token,
-            refresh_token: data.session.refresh_token,
-            options: { maxAge: rememberMe ? 60 * 60 * 24 * 365 : undefined },
-        });
-    }
+  if (data.session) {
+    await supabase.auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      options: { maxAge: rememberMe ? 60 * 60 * 24 * 365 : undefined },
+    });
+  }
 
-    // ✅ FIXED
-    const { error: rpcError } = await supabase.rpc("accept_invites_for_current_user");
-    if (rpcError) console.warn("RPC error:", rpcError.message);
+  const { error: rpcError } = await supabase.rpc(
+    'accept_invites_for_current_user'
+  );
+  if (rpcError) console.warn('RPC error:', rpcError.message);
 
-    const { data: me } = await supabase.auth.getUser();
-    return me?.user?.id ?? null;
+  // ✅ Ensure we have a terms acceptance row for the current terms version
+  if (termsVersion) {
+    const { error: termsErr } = await supabase.rpc(
+      'ensure_terms_acceptance_for_current_user',
+      { p_terms_version: termsVersion }
+    );
+    if (termsErr) console.warn('Terms RPC error:', termsErr.message);
+  }
+
+  const { data: me } = await supabase.auth.getUser();
+  return me?.user?.id ?? null;
 }
 
 export async function getProfileWithBuilding(userId) {
-    const { data: profile, error } = await supabase
-        .from("user_profiles")
-        .select(`
+  const { data: profile, error } = await supabase
+    .from('user_profiles')
+    .select(
+      `
       full_name,
       role,
       building_id,
       unit_id,
       units!user_profiles_unit_id_fkey ( building_id )
-    `)
-        .eq("id", userId)
-        .maybeSingle();
+    `
+    )
+    .eq('id', userId)
+    .maybeSingle();
 
-    if (error) throw error;
+  if (error) throw error;
 
-    const buildingId = profile?.building_id || profile?.units?.building_id || null;
-    return { profile, buildingId };
+  const buildingId =
+    profile?.building_id || profile?.units?.building_id || null;
+  return { profile, buildingId };
 }
 
 export function landingPath(role, buildingId) {
-    switch (role) {
-        case "manager":
-            return buildingId ? `/manager/buildings/${buildingId}/dashboard` : `/manager/dashboard`;
-        case "owner":
-            return buildingId ? `/owner/buildings/${buildingId}/dashboard` : `/owner/dashboard`;
-        case "tenant":
-            return buildingId ? `/tenant/buildings/${buildingId}/dashboard` : `/tenant/dashboard`;
-        default:
-            return "/";
-    }
+  switch (role) {
+    case 'manager':
+      return buildingId
+        ? `/manager/buildings/${buildingId}/dashboard`
+        : `/manager/dashboard`;
+    case 'owner':
+      return buildingId
+        ? `/owner/buildings/${buildingId}/dashboard`
+        : `/owner/dashboard`;
+    case 'tenant':
+      return buildingId
+        ? `/tenant/buildings/${buildingId}/dashboard`
+        : `/tenant/dashboard`;
+    default:
+      return '/';
+  }
 }
 
-export async function signUpUser(email, password) {
-    const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: `${window.location.origin}/` },
-    });
+// ✅ Add terms metadata at signup time (works even without session)
+export async function signUpUser(email, password, termsVersion) {
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: `${window.location.origin}/`,
+      data: {
+        terms_version: termsVersion || null,
+        terms_accepted_at: new Date().toISOString(),
+      },
+    },
+  });
 
-    if (error) throw error;
+  if (error) throw error;
 }
 
 export async function resendSignupEmail(email) {
-    const { error } = await supabase.auth.resend({
-        type: "signup",
-        email,
-        options: { emailRedirectTo: `${location.origin}/` },
-    });
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email,
+    options: { emailRedirectTo: `${location.origin}/` },
+  });
 
-    if (error) throw error;
+  if (error) throw error;
 }
 
 export async function sendPasswordReset(email) {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${location.origin}/login?reset=true#recover`,
-    });
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${location.origin}/login?reset=true#recover`,
+  });
 
-    if (error) throw error;
+  if (error) throw error;
 }

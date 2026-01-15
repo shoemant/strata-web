@@ -1,11 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/utils/supabase/client';
 
 // shadcn/ui
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,71 +22,129 @@ import { Skeleton } from '@/components/ui/skeleton';
 // icons
 import { User2, AlertCircle, CheckCircle2 } from 'lucide-react';
 
-// optional toast (if you’ve generated it with shadcn)
-// import { useToast } from "@/components/ui/use-toast";
-
 export default function ProfileOnboardingPage() {
   const router = useRouter();
   const params = useSearchParams();
-  const returnTo = params.get('returnTo') || '/';
 
-  // Preview mode lets you load & interact with this page
-  // without committing changes to the DB (great for QA/UX checks).
+  const returnTo = params.get('returnTo') || '/';
   const preview = params.get('preview') === '1';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
 
+  // For debugging / clarity
+  const [role, setRole] = useState(null);
+
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      setLoading(true);
+      setError('');
+
+      const { data: userRes } = await supabase.auth.getUser();
+      const user = userRes?.user;
+
       if (!user) {
-        router.replace(`/login?next=${encodeURIComponent('/onboarding/profile')}`);
+        router.replace(
+          `/login?next=${encodeURIComponent('/onboarding/profile?returnTo=' + encodeURIComponent(returnTo))}`
+        );
         return;
       }
-      const { data: profile, error } = await supabase
+
+      // ✅ Guardrail: try to apply any pending invites for this user
+      // This will set role/building/unit in user_profiles for any matching pending invites.
+      try {
+        await supabase.rpc('accept_invites_for_current_user');
+      } catch (e) {
+        // It's okay if this fails due to RLS or no invites; we'll still load profile below.
+        console.warn('accept_invites_for_current_user warning:', e);
+      }
+
+      // Load profile (now likely includes role/building)
+      const { data: profile, error: profErr } = await supabase
         .from('user_profiles')
-        .select('full_name')
+        .select('full_name, role')
         .eq('id', user.id)
         .maybeSingle();
-      if (error) {
-        setError(error.message);
+
+      if (cancelled) return;
+
+      if (profErr) {
+        setError(profErr.message);
       } else {
         setFullName(profile?.full_name || '');
+        setRole(profile?.role || null);
       }
+
       setLoading(false);
     })();
-  }, [router]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router, returnTo]);
 
   const save = async (e) => {
     e.preventDefault();
     setError('');
 
-    // In preview mode, do nothing persistent—just bounce back.
     if (preview) {
-      // If you use toasts, you can show a quick “Preview only” toast here.
-      // toast({ title: "Preview", description: "No changes were saved." });
       router.replace(returnTo);
       return;
     }
 
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
+
+    const { data: userRes } = await supabase.auth.getUser();
+    const user = userRes?.user;
+
     if (!user) {
+      setSaving(false);
       router.replace('/login');
       return;
     }
 
-    const { error } = await supabase
+    const cleanName = String(fullName || '').trim();
+    if (!cleanName) {
+      setSaving(false);
+      setError('Full name is required.');
+      return;
+    }
+
+    // Save name
+    const { error: upsertErr } = await supabase
       .from('user_profiles')
-      .upsert({ id: user.id, full_name: fullName }, { onConflict: 'id' });
+      .upsert({ id: user.id, full_name: cleanName }, { onConflict: 'id' });
+
+    if (upsertErr) {
+      setSaving(false);
+      setError(upsertErr.message);
+      return;
+    }
+
+    // ✅ Re-check role after saving.
+    // If role is still missing, redirecting to / will cause the loop again.
+    const { data: prof2, error: prof2Err } = await supabase
+      .from('user_profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
 
     setSaving(false);
 
-    if (error) {
-      setError(error.message);
+    if (prof2Err) {
+      setError(prof2Err.message);
+      return;
+    }
+
+    if (!prof2?.role) {
+      setError(
+        'Your account does not have a role yet (manager/owner/tenant). Please accept an invite link sent to your email, or ask a manager to resend it.'
+      );
       return;
     }
 
@@ -90,7 +154,6 @@ export default function ProfileOnboardingPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
-
         <Card className="w-full max-w-md mx-auto">
           <CardHeader className="space-y-2">
             <div className="flex items-center gap-3">
@@ -130,7 +193,9 @@ export default function ProfileOnboardingPage() {
               </div>
               <div>
                 <CardTitle>Complete your profile</CardTitle>
-                <CardDescription>We’re missing a couple of details.</CardDescription>
+                <CardDescription>
+                  We’re missing a couple of details.
+                </CardDescription>
               </div>
             </div>
             {preview && (
@@ -151,6 +216,18 @@ export default function ProfileOnboardingPage() {
               <AlertTitle>Something went wrong</AlertTitle>
               <AlertDescription className="whitespace-pre-line">
                 {error}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Optional helpful hint if role is missing */}
+          {!role && !error && (
+            <Alert>
+              <AlertTitle>Role not set yet</AlertTitle>
+              <AlertDescription className="text-sm">
+                Your account doesn’t have a role (manager/owner/tenant) yet. If
+                you were invited, open the invite link in your email and accept
+                it.
               </AlertDescription>
             </Alert>
           )}
