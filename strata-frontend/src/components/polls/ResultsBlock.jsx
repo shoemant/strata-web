@@ -3,7 +3,12 @@
 import { useMemo } from 'react';
 import { Progress } from '@/components/ui/progress';
 
-export default function ResultsBlock({ poll, options, results }) {
+export default function ResultsBlock({
+  poll,
+  options,
+  results,
+  canShowResults,
+}) {
   const countsByOption = useMemo(() => {
     const map = new Map();
     (results || []).forEach((r) =>
@@ -20,14 +25,17 @@ export default function ResultsBlock({ poll, options, results }) {
     return sum;
   }, [options, countsByOption]);
 
-  const resultsAvailable = (results || []).length > 0;
-
-  if (!resultsAvailable) {
+  if (!canShowResults) {
     return (
       <div className="text-sm text-muted-foreground">
-        Results are not available yet.
+        Results will be visible after the poll closes.
       </div>
     );
+  }
+
+  // Results are allowed, but there may be zero votes.
+  if (total === 0) {
+    return <div className="text-sm text-muted-foreground">No votes yet.</div>;
   }
 
   return (

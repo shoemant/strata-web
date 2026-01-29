@@ -38,6 +38,7 @@ export default function PollCard({
   results,
   userId,
   onChanged,
+  canCreate,
 }) {
   const supabase = useSupabaseClient();
   const [loadingOptions, setLoadingOptions] = useState(false);
@@ -47,11 +48,41 @@ export default function PollCard({
   const closed = useMemo(() => isClosed(poll), [poll]);
   const open = useMemo(() => isOpen(poll), [poll]);
 
+  const [deleting, setDeleting] = useState(false);
+
+  const canShowResults = useMemo(() => {
+    if (closed) return true;
+    return Boolean(poll.show_results_before_close);
+  }, [closed, poll.show_results_before_close]);
+
   const mySelectedOptionIds = useMemo(() => {
     return (myVotes || [])
       .filter((v) => v.poll_id === poll.id)
       .map((v) => v.option_id);
   }, [myVotes, poll.id]);
+
+  const canDeleteThisPoll = useMemo(() => {
+    return Boolean(canCreate) || poll.created_by === userId;
+  }, [canCreate, poll.created_by, userId]);
+
+  async function onDeletePoll() {
+    if (!canDeleteThisPoll) return;
+    const ok = window.confirm(
+      'Delete this poll? This will also remove its options and votes.'
+    );
+    if (!ok) return;
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from('polls').delete().eq('id', poll.id);
+      if (error) throw error;
+      await onChanged?.();
+    } catch (e) {
+      alert(e?.message || 'Failed to delete poll.');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const pollResults = useMemo(() => {
     return (results || []).filter((r) => r.poll_id === poll.id);
@@ -100,16 +131,29 @@ export default function PollCard({
             ) : (
               <Badge variant="secondary">Scheduled</Badge>
             )}
+
             {poll.allow_anonymous ? (
               <Badge variant="outline">Anonymous</Badge>
             ) : (
               <Badge variant="outline">Not anonymous</Badge>
             )}
+
             {poll.allow_multiple ? (
               <Badge variant="outline">Multi ({poll.max_choices} max)</Badge>
             ) : (
               <Badge variant="outline">Single choice</Badge>
             )}
+
+            {canDeleteThisPoll ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={onDeletePoll}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -142,7 +186,12 @@ export default function PollCard({
 
             <Separator />
 
-            <ResultsBlock poll={poll} options={options} results={pollResults} />
+            <ResultsBlock
+              poll={poll}
+              options={options}
+              results={pollResults}
+              canShowResults={canShowResults}
+            />
           </>
         ) : null}
       </CardContent>

@@ -103,6 +103,11 @@ function getBuildingNav(role, buildingId) {
         label: 'Bookings',
       },
       {
+        href: `/manager/buildings/${buildingId}/polls`,
+        icon: Bell,
+        label: 'Polls',
+      },
+      {
         href: `/manager/buildings/${buildingId}/residents`,
         icon: Users,
         label: 'Residents',

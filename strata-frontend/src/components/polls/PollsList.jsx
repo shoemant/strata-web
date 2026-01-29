@@ -14,6 +14,7 @@ export default function PollsList({
   myVotes,
   results,
   userId,
+  canCreate,
   onChanged,
 }) {
   if (!polls?.length) {
@@ -41,6 +42,7 @@ export default function PollsList({
           results={results}
           userId={userId}
           onChanged={onChanged}
+          canCreate={canCreate}
         />
       ))}
     </div>

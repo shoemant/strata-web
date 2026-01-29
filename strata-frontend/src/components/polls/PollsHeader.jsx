@@ -1,6 +1,7 @@
 'use client';
 
 import CreatePollDialog from '@/components/polls/CreatePollDialog';
+import DesignatePollCreatorsDialog from '@/components/polls/DesignatePollCreatorsDialog';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -35,6 +36,18 @@ export default function PollsHeader({
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
+
+          {canCreate ? (
+            <DesignatePollCreatorsDialog
+              buildingId={buildingId}
+              canDesignate={canCreate}
+              trigger={
+                <Button type="button" variant="outline" disabled={loading}>
+                  Manage poll creators
+                </Button>
+              }
+            />
+          ) : null}
 
           {canCreate ? (
             <CreatePollDialog buildingId={buildingId} onCreated={onCreated} />

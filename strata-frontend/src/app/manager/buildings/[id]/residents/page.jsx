@@ -405,12 +405,6 @@ export default function ManagerResidentsPage() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold">Residents</h1>
-            <p className="text-sm text-muted-foreground">
-              Manage owners and tenants in this building. Update units or remove
-              access.
-            </p>
-
             <div className="mt-2 flex flex-wrap gap-2">
               <Badge variant="secondary">Total: {counts.total}</Badge>
               <Badge variant="secondary">Owners: {counts.owners}</Badge>

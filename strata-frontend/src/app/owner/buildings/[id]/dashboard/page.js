@@ -71,6 +71,22 @@ async function fetchHeroImageUrl(supabase, buildingId) {
   return data?.url ?? null;
 }
 
+async function fetchOpenPollCount(supabase, buildingId) {
+  if (!buildingId) return 0;
+
+  const nowIso = new Date().toISOString();
+
+  const { count, error } = await supabase
+    .from('polls')
+    .select('id', { count: 'exact', head: true })
+    .eq('building_id', buildingId)
+    .lte('starts_at', nowIso)
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
 async function fetchOwnerBuilding(supabase, userId) {
   const { data, error } = await supabase
     .from('user_profiles')
@@ -239,6 +255,8 @@ export default function OwnerDashboard() {
 
   const loadedForUserRef = useRef(null);
 
+  const [openPollsCount, setOpenPollsCount] = useState(0);
+
   useEffect(() => {
     if (!userId) return;
     if (loadedForUserRef.current === userId) return;
@@ -262,17 +280,19 @@ export default function OwnerDashboard() {
           setUpcomingBookings([]);
           setOpenRequests([]);
           setCounts({ upcomingBookings: 0, openRequests: 0, documents: 0 });
+          setOpenPollsCount(0);
           loadedForUserRef.current = userId;
           return;
         }
-
-        const [a, heroUrl, cts, bookings, requests] = await Promise.all([
-          fetchOwnerAnnouncements(supabase, buildingId),
-          fetchHeroImageUrl(supabase, buildingId),
-          fetchCounts(supabase, { buildingId, userId }),
-          fetchUpcomingBookings(supabase, { buildingId, userId, limit: 5 }),
-          fetchOpenRequests(supabase, { buildingId, userId, limit: 5 }),
-        ]);
+        const [a, heroUrl, cts, bookings, requests, openPollCount] =
+          await Promise.all([
+            fetchOwnerAnnouncements(supabase, buildingId),
+            fetchHeroImageUrl(supabase, buildingId),
+            fetchCounts(supabase, { buildingId, userId }),
+            fetchUpcomingBookings(supabase, { buildingId, userId, limit: 5 }),
+            fetchOpenRequests(supabase, { buildingId, userId, limit: 5 }),
+            fetchOpenPollCount(supabase, buildingId),
+          ]);
 
         if (canceled) return;
 
@@ -285,6 +305,8 @@ export default function OwnerDashboard() {
         setCounts(cts);
         setUpcomingBookings(bookings || []);
         setOpenRequests(requests || []);
+
+        setOpenPollsCount(openPollCount || 0);
 
         loadedForUserRef.current = userId;
       } catch (e) {
@@ -753,7 +775,71 @@ export default function OwnerDashboard() {
 
             {/* RIGHT: schedule + additional info */}
             <div className="space-y-6">
-              {/* Schedule (moved to right column) */}
+              <Card className="rounded-xl border-border/60 shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-4">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-lg bg-blue-500/10">
+                        <TrendingUp className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <CardTitle className="text-xl">
+                        Polls &amp; Votes
+                      </CardTitle>
+                    </div>
+                    <CardDescription>
+                      Participate in building polls and view results.
+                    </CardDescription>
+                  </div>
+
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1 bg-transparent"
+                  >
+                    <a
+                      href={
+                        buildingId
+                          ? `/owner/buildings/${buildingId}/polls`
+                          : '/owner/polls'
+                      }
+                    >
+                      View <ArrowUpRight className="h-3.5 w-3.5" />
+                    </a>
+                  </Button>
+                </CardHeader>
+
+                <CardContent className="space-y-3">
+                  {openPollsCount > 0 ? (
+                    <div className="flex items-center justify-between rounded-xl border border-border/50 p-4">
+                      <div className="min-w-0">
+                        <div className="font-medium text-foreground">
+                          Open polls available
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          You have {openPollsCount} poll
+                          {openPollsCount === 1 ? '' : 's'} to vote on.
+                        </div>
+                      </div>
+                      <Badge className="shrink-0">{openPollsCount} Open</Badge>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-border p-6 text-center space-y-2">
+                      <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                        <CheckCircle2 className="h-6 w-6 text-green-500" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">
+                          No open polls right now
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Check back later for new votes.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
               <ScheduleCard
                 building={building}
                 announcements={announcements}
