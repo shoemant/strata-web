@@ -35,8 +35,35 @@ import {
 const GUTTER = 50; // collapsed sidebar width
 const ICON_BOX = 48; // actual icon box size
 
+function normalizeRole(role) {
+  if (!role) return null;
+  if (role === 'admin') return 'admin';
+  if (role === 'manager') return 'manager';
+  if (role === 'owner') return 'owner';
+  if (role === 'tenant') return 'tenant';
+  return role;
+}
+
+// ✅ NEW MODEL: base + optional per-role override
+function isFeatureEnabled(featuresRow, role, key) {
+  // role: manager | owner | tenant
+  // key: announcements | documents | resources | polls | maintenance
+
+  // If no row, fail-open (everything visible)
+  if (!featuresRow) return true;
+
+  const base = featuresRow?.[`base_${key}`] !== false; // default true
+  const override = featuresRow?.[`${role}_${key}_override`]; // null | true | false
+
+  // null/undefined = inherit => allow if base is on
+  const roleAllows =
+    override === null || override === undefined ? true : override;
+
+  // base off means nobody sees it, even if override says enabled
+  return base && roleAllows;
+}
+
 function getActiveBuildingIdFromPath(pathname) {
-  // supports /manager/buildings/:id/... and /owner/buildings/:id/... and /tenant/buildings/:id/...
   const parts = (pathname || '').split('/').filter(Boolean);
   const idx = parts.indexOf('buildings');
   if (idx === -1) return null;
@@ -44,7 +71,6 @@ function getActiveBuildingIdFromPath(pathname) {
 }
 
 function getRestPathAfterBuildingId(pathname) {
-  // returns everything after /buildings/:id, e.g. "documents" or "announcements/foo"
   const parts = (pathname || '').split('/').filter(Boolean);
   const idx = parts.indexOf('buildings');
   if (idx === -1) return '';
@@ -57,12 +83,8 @@ function getGlobalNav(role) {
     {
       manager: [],
       admin: [],
-      owner: [], // owner items live under active building
-      tenant: [
-        // Keep only truly global tenant items here.
-        // If you want tenant profile per-building instead, move it into building nav below.
-        { href: '/tenant/profile', icon: User, label: 'Profile' },
-      ],
+      owner: [],
+      tenant: [{ href: '/tenant/profile', icon: User, label: 'Profile' }],
     }[role] || []
   );
 }
@@ -91,21 +113,31 @@ function getBuildingNav(role, buildingId) {
         href: `/manager/buildings/${buildingId}/announcements`,
         icon: Bell,
         label: 'Announcements',
+        featureKey: 'announcements',
       },
       {
         href: `/manager/buildings/${buildingId}/documents`,
         icon: FileText,
         label: 'Documents',
+        featureKey: 'documents',
       },
       {
         href: `/manager/buildings/${buildingId}/resources`,
         icon: Box,
         label: 'Bookings',
+        featureKey: 'resources',
       },
       {
         href: `/manager/buildings/${buildingId}/polls`,
         icon: Bell,
         label: 'Polls',
+        featureKey: 'polls',
+      },
+      {
+        href: `/manager/buildings/${buildingId}/maintenance`,
+        icon: Wrench,
+        label: 'Maintenance',
+        featureKey: 'maintenance',
       },
       {
         href: `/manager/buildings/${buildingId}/residents`,
@@ -136,26 +168,31 @@ function getBuildingNav(role, buildingId) {
         href: `/owner/buildings/${buildingId}/announcements`,
         icon: Bell,
         label: 'Announcements',
+        featureKey: 'announcements',
       },
       {
         href: `/owner/buildings/${buildingId}/bookings`,
         icon: Box,
         label: 'Bookings',
+        featureKey: 'resources',
       },
       {
         href: `/owner/buildings/${buildingId}/documents`,
         icon: FileText,
         label: 'Documents',
+        featureKey: 'documents',
       },
       {
         href: `/owner/buildings/${buildingId}/maintenance`,
         icon: Wrench,
         label: 'Maintenance',
+        featureKey: 'maintenance',
       },
       {
         href: `/owner/buildings/${buildingId}/polls`,
         icon: Bell,
         label: 'Polls & Votes',
+        featureKey: 'polls',
       },
       {
         href: `/owner/buildings/${buildingId}/invite`,
@@ -166,7 +203,6 @@ function getBuildingNav(role, buildingId) {
   }
 
   if (role === 'tenant') {
-    // New: tenant becomes building-scoped
     return [
       {
         href: `/tenant/buildings/${buildingId}/dashboard`,
@@ -177,26 +213,31 @@ function getBuildingNav(role, buildingId) {
         href: `/tenant/buildings/${buildingId}/announcements`,
         icon: Bell,
         label: 'Announcements',
+        featureKey: 'announcements',
       },
       {
         href: `/tenant/buildings/${buildingId}/bookings`,
         icon: Box,
         label: 'Bookings',
+        featureKey: 'resources',
       },
       {
         href: `/tenant/buildings/${buildingId}/documents`,
         icon: FileText,
         label: 'Documents',
+        featureKey: 'documents',
       },
       {
         href: `/tenant/buildings/${buildingId}/maintenance`,
         icon: Wrench,
         label: 'Maintenance',
+        featureKey: 'maintenance',
       },
       {
         href: `/tenant/buildings/${buildingId}/polls`,
         icon: Bell,
         label: 'Polls & Votes',
+        featureKey: 'polls',
       },
       {
         href: `/tenant/buildings/${buildingId}/invite`,
@@ -207,7 +248,7 @@ function getBuildingNav(role, buildingId) {
         href: `/tenant/buildings/${buildingId}/profile`,
         icon: User,
         label: 'Profile',
-      }, // optional
+      },
     ];
   }
 
@@ -222,8 +263,6 @@ export default function NavBar() {
 
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [hoverOpen, setHoverOpen] = useState(false);
-
-  // Touch/coarse-pointer detection (hover is unreliable on touch)
   const [isTouch, setIsTouch] = useState(false);
 
   useEffect(() => {
@@ -242,12 +281,11 @@ export default function NavBar() {
     };
   }, []);
 
-  // On touch devices: ignore hoverOpen entirely. Only pinnedOpen controls expand/collapse.
   const expanded = pinnedOpen || (!isTouch && hoverOpen);
 
-  // Normalize so hooks below always run safely
   const user = ctx?.user ?? null;
-  const role = ctx?.role ?? null;
+  const roleRaw = ctx?.role ?? null;
+  const role = normalizeRole(roleRaw);
   const buildings = ctx?.buildings ?? [];
 
   const isActive = (href) =>
@@ -256,6 +294,38 @@ export default function NavBar() {
   const activeBuildingId = getActiveBuildingIdFromPath(pathname);
   const fallbackBuildingId = buildings?.[0]?.id ?? null;
   const effectiveBuildingId = activeBuildingId || fallbackBuildingId;
+
+  const [buildingFeatures, setBuildingFeatures] = useState(null);
+
+  useEffect(() => {
+    if (!supabase || !effectiveBuildingId) {
+      setBuildingFeatures(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from('building_features')
+        .select('*')
+        .eq('building_id', effectiveBuildingId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error('[navbar/features] load error', error);
+        setBuildingFeatures(null); // fail-open
+      } else {
+        setBuildingFeatures(data || null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, effectiveBuildingId]);
 
   const activeBuilding = useMemo(() => {
     if (!effectiveBuildingId) return null;
@@ -274,34 +344,76 @@ export default function NavBar() {
   const buildingItems = useMemo(() => {
     if (!role) return [];
 
-    // Fallback for tenant if you haven't created /tenant/buildings/[id] yet:
+    // Tenant legacy fallback
     if (role === 'tenant' && !activeBuildingId) {
-      return [
+      const fallback = [
         {
           href: '/tenant/dashboard',
           icon: LayoutDashboard,
           label: 'Dashboard',
         },
-        { href: '/tenant/documents', icon: FileText, label: 'Documents' },
-        { href: '/tenant/announcements', icon: Bell, label: 'Announcements' },
-        { href: '/tenant/resources', icon: Box, label: 'Book Resources' },
+        {
+          href: '/tenant/documents',
+          icon: FileText,
+          label: 'Documents',
+          featureKey: 'documents',
+        },
+        {
+          href: '/tenant/announcements',
+          icon: Bell,
+          label: 'Announcements',
+          featureKey: 'announcements',
+        },
+        {
+          href: '/tenant/resources',
+          icon: Box,
+          label: 'Book Resources',
+          featureKey: 'resources',
+        },
       ];
+
+      return fallback.filter((item) => {
+        if (!item.featureKey) return true;
+        return isFeatureEnabled(buildingFeatures, role, item.featureKey);
+      });
     }
 
-    return getBuildingNav(role, effectiveBuildingId);
-  }, [role, activeBuildingId, effectiveBuildingId]);
+    const items = getBuildingNav(role, effectiveBuildingId);
 
-  const showBuildingSwitcher =
-    (buildings || []).length >= 1 &&
-    (role === 'manager' || role === 'owner' || role === 'tenant');
+    return items.filter((item) => {
+      if (!item.featureKey) return true;
+      return isFeatureEnabled(buildingFeatures, role, item.featureKey);
+    });
+  }, [role, activeBuildingId, effectiveBuildingId, buildingFeatures]);
+
+  function restToFeatureKey(restFirstSegment) {
+    if (restFirstSegment === 'bookings' || restFirstSegment === 'resources')
+      return 'resources';
+    if (restFirstSegment === 'documents') return 'documents';
+    if (restFirstSegment === 'announcements') return 'announcements';
+    if (restFirstSegment === 'maintenance') return 'maintenance';
+    if (restFirstSegment === 'polls') return 'polls';
+    return null;
+  }
 
   function handleSwitchBuilding(nextBuildingId) {
     const rest = getRestPathAfterBuildingId(pathname);
-    const safeRest = rest && rest.length ? rest : 'dashboard';
+    const first = (rest || '').split('/').filter(Boolean)[0] || 'dashboard';
+
+    const fk = restToFeatureKey(first);
+
+    // If admin, don't hide (optional)
+    const allowed =
+      role === 'admin'
+        ? true
+        : fk
+          ? isFeatureEnabled(buildingFeatures, role, fk)
+          : true;
+
+    const safeRest = allowed ? first : 'dashboard';
     router.push(`/${role}/buildings/${nextBuildingId}/${safeRest}`);
   }
 
-  // On touch, after you navigate, collapse the sidebar automatically
   useEffect(() => {
     if (isTouch) setPinnedOpen(false);
   }, [pathname, isTouch]);
@@ -310,7 +422,6 @@ export default function NavBar() {
     if (isTouch) setPinnedOpen(false);
   };
 
-  // ✅ Important: return AFTER all hooks have run (prevents hook order mismatch)
   if (!user || !role) return null;
 
   return (
@@ -555,7 +666,6 @@ function BuildingSwitcherPopover({
 
   return (
     <div className="relative mt-2">
-      {/* fixed-height row: never changes layout */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -595,7 +705,6 @@ function BuildingSwitcherPopover({
         </div>
       </button>
 
-      {/* popover: absolutely positioned so it doesn't push nav down */}
       {open ? (
         <div className="absolute left-0 right-0 top-[44px] z-50 rounded-2xl border border-border bg-background shadow-lg p-2">
           {buildings.length >= 6 ? (
@@ -632,6 +741,7 @@ function BuildingSwitcherPopover({
                 </button>
               );
             })}
+
             {filtered.length === 0 ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">
                 No matches.

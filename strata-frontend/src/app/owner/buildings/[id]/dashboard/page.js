@@ -689,13 +689,7 @@ export default function OwnerDashboard() {
                     size="sm"
                     className="shrink-0 gap-1"
                   >
-                    <a
-                      href={
-                        buildingId
-                          ? `/owner/buildings/${buildingId}/requests/new`
-                          : '/owner/requests/new'
-                      }
-                    >
+                    <a href={`/owner/buildings/${buildingId}/maintenance`}>
                       Create request <ArrowUpRight className="h-3.5 w-3.5" />
                     </a>
                   </Button>
@@ -743,11 +737,7 @@ export default function OwnerDashboard() {
                           className="shrink-0 gap-1 group-hover:border-orange-500/50 bg-transparent"
                         >
                           <a
-                            href={
-                              buildingId
-                                ? `/owner/buildings/${buildingId}/requests`
-                                : '/owner/requests'
-                            }
+                            href={`/owner/buildings/${buildingId}/maintenance`}
                           >
                             View <ArrowUpRight className="h-3.5 w-3.5" />
                           </a>

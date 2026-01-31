@@ -53,8 +53,6 @@
   font-weight: 500;
 }
 
-
-
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -66,7 +64,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 47.4% 11.2%;
 
---primary: 197 96% 43%; /* 🎯 #049cd9 */
+    --primary: 197 96% 43%; /* 🎯 #049cd9 */
     --primary-foreground: 210 40% 98%;
 
     --secondary: 210 40% 96.1%;
@@ -75,7 +73,7 @@
     --muted: 210 40% 96.1%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 200 100% 93%;               /* very light sky */
+    --accent: 200 100% 93%; /* very light sky */
     --accent-foreground: 204 94% 40%;
 
     --destructive: 0 84.2% 60.2%;
@@ -95,50 +93,39 @@
   }
 
   .dark {
-    --background: 0 0% 6%;           /* #0F0F0F — deep background */
-    --foreground: 0 0% 96%;          /* #F5F5F5 — almost white text */
+    --background: 220 15% 10%; /* soft near-black */
+    --foreground: 210 20% 96%;
 
-    --card: 0 0% 10%;                /* #1A1A1A */
-    --card-foreground: 0 0% 92%;     /* #EAEAEA */
+    --card: 220 15% 14%;
+    --card-foreground: 210 20% 95%;
 
-    --popover: 0 0% 8%;              /* #141414 */
-    --popover-foreground: 0 0% 95%;  /* #F2F2F2 */
+    --popover: 220 15% 12%;
+    --popover-foreground: 210 20% 95%;
 
-    --primary: 220 85% 65%;          /* Vibrant blue (#3B82F6) */
-    --primary-foreground: 0 0% 100%; /* White text on blue */
+    --primary: 220 85% 65%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 18%;           /* #2E2E2E */
-    --secondary-foreground: 0 0% 85%;/* #D9D9D9 */
+    --secondary: 220 12% 20%;
+    --secondary-foreground: 210 15% 90%;
 
-    --muted: 0 0% 14%;               /* #232323 */
-    --muted-foreground: 0 0% 65%;    /* #A6A6A6 */
+    --muted: 220 12% 18%;
+    --muted-foreground: 215 15% 70%;
 
-    --accent: 210 80% 60%;           /* Softer teal accent (#38BDF8) */
-    --accent-foreground: 0 0% 98%;   /* Nearly white */
+    --accent: 210 80% 60%;
+    --accent-foreground: 0 0% 98%;
 
-    --destructive: 0 72% 50%;        /* Bright red (#EF4444) */
-    --destructive-foreground: 0 0% 98%; /* White text on red */
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 20%;              /* #333333 */
-    --input: 0 0% 18%;               /* #2E2E2E */
-    --ring: 220 85% 65%;             /* Matches primary blue */
+    --border: 220 10% 26%;
+    --input: 220 10% 22%;
+    --ring: 220 85% 65%;
 
-    --chart-1: 220 85% 65%;          /* Blue */
-    --chart-2: 160 65% 55%;          /* Green */
-    --chart-3: 45 100% 50%;          /* Yellow */
-    --chart-4: 280 70% 60%;          /* Purple */
-    --chart-5: 340 80% 60%;          /* Pink */
-    
     --radius: 0.75rem;
 
-    --hover: 210 20% 30%
+    --hover: 220 12% 24%;
   }
-
 }
-
-
-
-
 
 @layer base {
   * {
@@ -160,4 +147,3 @@
     }
   }
 }
-
