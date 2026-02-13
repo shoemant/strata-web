@@ -603,7 +603,7 @@ function NavContent({
       </ScrollArea>
 
       {/* Sticky bottom */}
-      <div className="shrink-0">
+      <div className="shrink-0 pb-[env(safe-area-inset-bottom)]">
         <Separator className="my-2" />
         <div className="px-2 pb-3">
           <NavLink
@@ -766,7 +766,10 @@ function MobileHeaderMenuSlot({ children }) {
             </Button>
           </SheetTrigger>
 
-          <SheetContent side="left" className="w-[85vw] max-w-sm p-0">
+          <SheetContent
+            side="left"
+            className="w-[85vw] max-w-sm p-0 h-[100dvh] pb-[env(safe-area-inset-bottom)]"
+          >
             <SheetHeader className="px-4 py-4 border-b border-border">
               <SheetTitle className="sr-only">Navigation menu</SheetTitle>
               <SheetDescription className="sr-only">
@@ -786,7 +789,7 @@ function MobileHeaderMenuSlot({ children }) {
               </div>
             </SheetHeader>
 
-            <div className="flex h-[calc(100vh-65px)] flex-col">
+            <div className="flex h-[calc(100dvh-65px)] flex-col min-h-0">
               {typeof children === 'function'
                 ? children({ close: () => setOpen(false) })
                 : children}
