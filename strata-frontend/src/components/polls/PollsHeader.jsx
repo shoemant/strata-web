@@ -31,8 +31,13 @@ export default function PollsHeader({
           </CardDescription>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={onRefresh} disabled={loading}>
+        <div className="flex flex-col w-full gap-2 md:flex-row md:w-auto md:items-center">
+          <Button
+            variant="outline"
+            onClick={onRefresh}
+            disabled={loading}
+            className="w-full md:w-auto"
+          >
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
@@ -42,7 +47,12 @@ export default function PollsHeader({
               buildingId={buildingId}
               canDesignate={canCreate}
               trigger={
-                <Button type="button" variant="outline" disabled={loading}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={loading}
+                  className="w-full md:w-auto"
+                >
                   Manage poll creators
                 </Button>
               }

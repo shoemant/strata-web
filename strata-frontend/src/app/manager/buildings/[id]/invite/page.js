@@ -281,7 +281,7 @@ export default function ManagerInviteHubPage() {
 
   return (
     <ProtectedRoute allowedRoles={['manager']}>
-      <div className="absolute inset-y-0 left-16 right-0 bg-background p-6 pt-12">
+      <div className="absolute inset-y-0 left-0 md:left-16 right-0 bg-background p-6 pt-12">
         <div className="max-w-full space-y-8 mt-10 sm:mt-8">
           {pageStatus.ok === false && pageStatus.msg ? (
             <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">

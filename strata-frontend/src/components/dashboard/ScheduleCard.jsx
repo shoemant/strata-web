@@ -141,7 +141,7 @@ export default function ScheduleCard({
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 px-3 sm:px-6">
         <div className="overflow-x-auto">
           <div className="min-w-[330px]">
             <Calendar

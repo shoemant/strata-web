@@ -409,7 +409,7 @@ export default function OwnerBookResourcePage() {
   }
 
   return (
-    <main className="absolute top-16 bottom-0 left-16 right-0 p-6 space-y-6 overflow-auto">
+    <main className="absolute top-16 bottom-0 left-0 md:left-16 right-0 p-6 space-y-6 overflow-auto">
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-4">

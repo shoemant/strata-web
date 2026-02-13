@@ -97,7 +97,7 @@ export default function BuildingLayout({ children }) {
         <HeaderActionsProvider>
           <BuildingContext.Provider value={value}>
             <NavBar />
-            <div className="manager-shell min-w-0 w-full pl-20">
+            <div className="manager-shell min-w-0 w-full md:pl-20">
               <HeaderFromContext />
               <main className="min-h-screen bg-background transition-colors duration-500 ease-in-out w-full max-w-none overflow-x-hidden pt-20 px-6">
                 {children}

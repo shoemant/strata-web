@@ -216,7 +216,7 @@ export default function ManagerDashboard() {
 
   return (
     <ProtectedRoute allowedRoles={['manager']}>
-      <div className="absolute top-16 bottom-0 left-16 right-0 bg-background px-6">
+      <div className="absolute top-16 bottom-0 left-0 md:left-16 right-0 bg-background px-6">
         <div className="space-y-6">
           <HeroWithAnnouncements
             imageUrl={building?.hero_image_url}

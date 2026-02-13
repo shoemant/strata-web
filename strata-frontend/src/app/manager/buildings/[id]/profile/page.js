@@ -190,7 +190,7 @@ export default function ProfilePage() {
 
   return (
     // Full-width container; sidebar offset should be handled by your layout.
-    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 pt-0 pb-6 sm:py-6 space-y-6">
       <Card className="w-full">
         <CardHeader className="space-y-1">
           <CardTitle>Profile</CardTitle>

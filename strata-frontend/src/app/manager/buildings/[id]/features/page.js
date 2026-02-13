@@ -360,7 +360,7 @@ export default function BuildingFeaturesPage() {
 
   return (
     <ProtectedRoute allowedRoles={['manager']}>
-      <div className="absolute inset-y-0 left-16 right-0 bg-background p-6 space-y-8">
+      <div className="absolute inset-y-0 left-0 md:left-16 right-0 bg-background p-6 space-y-8">
         {saveError ? (
           <Alert variant="destructive">
             <AlertTitle>Something went wrong</AlertTitle>

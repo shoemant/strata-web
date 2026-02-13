@@ -169,8 +169,8 @@ export default function OwnerInvitePage() {
 
   return (
     <ProtectedRoute allowedRoles={['owner']}>
-      <div className="absolute inset-y-0 left-16 right-0 bg-background p-6">
-        <div className="max-w-3xl space-y-6 mt-10 sm:mt-8">
+      <div className="absolute top-16 bottom-0 left-0 md:left-16 right-0 bg-background p-6 space-y-8">
+        <div className="max-w-3xl space-y-6">
           <div className="flex items-center justify-between">
             <Link href={`/owner/buildings/${buildingId}/invitations`}>
               <Button variant="outline">Invitation history</Button>

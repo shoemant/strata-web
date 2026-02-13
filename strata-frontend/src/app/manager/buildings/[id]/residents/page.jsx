@@ -389,7 +389,7 @@ export default function ManagerResidentsPage() {
 
   if (loading) {
     return (
-      <main className="absolute top-16 bottom-0 left-16 right-0 p-6 overflow-auto">
+      <main className="absolute top-16 bottom-0 left-0 md:left-16 right-0 p-6 overflow-auto">
         <div className="max-w-6xl mx-auto space-y-4">
           <Skeleton className="h-10 w-1/2" />
           <Skeleton className="h-32 w-full" />
@@ -400,7 +400,7 @@ export default function ManagerResidentsPage() {
   }
 
   return (
-    <main className="absolute top-16 bottom-0 left-16 right-0 p-6 overflow-auto">
+    <main className="absolute top-16 bottom-0 left-0 md:left-16 right-0 p-6 overflow-auto">
       <div className="max-w-full mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between gap-4">

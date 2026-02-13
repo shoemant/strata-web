@@ -187,7 +187,7 @@ export default function ManagerMaintenancePage() {
   if (loading) return <p className="p-6">Loading…</p>;
 
   return (
-    <main className="absolute top-16 bottom-0 left-16 right-0 overflow-auto">
+    <main className="absolute top-16 bottom-0 left-0 md:left-16 right-0 overflow-auto">
       <div className="w-full px-6 pt-0 pb-6 space-y-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">

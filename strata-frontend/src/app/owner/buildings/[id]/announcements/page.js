@@ -61,7 +61,7 @@ export default function OwnerAnnouncementsPage() {
       : null;
 
   return (
-    <div className="absolute top-16 bottom-0 left-16 right-0 bg-background p-6 space-y-8">
+    <div className="absolute top-16 bottom-0 left-0 md:left-16 right-0 bg-background p-6 space-y-8">
       <div className="flex items-center justify-between gap-4">
         <Button
           variant="outline"

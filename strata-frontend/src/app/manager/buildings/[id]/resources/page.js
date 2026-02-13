@@ -243,7 +243,7 @@ export default function ManagerBookingsHomePage() {
   if (loading) return <p className="p-6">Loading…</p>;
 
   return (
-    <main className="absolute top-16 bottom-0 left-16 right-0 p-6 space-y-8 overflow-auto">
+    <main className="absolute top-16 bottom-0 left-0 md:left-16 right-0 p-6 space-y-8 overflow-auto">
       {/* ---- Header (primary vs secondary) ---- */}
       <div className="flex items-start justify-between gap-4">
         <div>

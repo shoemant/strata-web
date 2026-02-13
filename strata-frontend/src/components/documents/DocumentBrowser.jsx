@@ -1,11 +1,17 @@
-"use client";
+'use client';
 
-import React, { useEffect, useMemo, useState } from "react";
-import { useSession, useSupabaseClient } from "@supabase/auth-helpers-react";
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronLeft, ChevronRight, Home, FolderPlus, File as FileIcon } from "lucide-react";
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Home,
+  FolderPlus,
+  File as FileIcon,
+} from 'lucide-react';
 
 /**
  * @param {Object} props
@@ -27,28 +33,31 @@ export default function DocumentsBrowser({
   const supabase = useSupabaseClient();
   const session = useSession();
 
-  const [currentPath, setCurrentPath] = useState("");
+  const [currentPath, setCurrentPath] = useState('');
   const [childFolders, setChildFolders] = useState([]);
   const [docs, setDocs] = useState([]);
 
   const isAuthed = Boolean(session?.user?.id);
 
   const crumbs = useMemo(
-    () => (currentPath ? currentPath.split("/").filter(Boolean) : []),
+    () => (currentPath ? currentPath.split('/').filter(Boolean) : []),
     [currentPath]
   );
-  const prefix = useMemo(() => (currentPath ? `${currentPath}/` : ""), [currentPath]);
+  const prefix = useMemo(
+    () => (currentPath ? `${currentPath}/` : ''),
+    [currentPath]
+  );
 
   function goUp() {
     if (!currentPath) return;
-    const parts = currentPath.split("/").filter(Boolean);
+    const parts = currentPath.split('/').filter(Boolean);
     parts.pop();
-    setCurrentPath(parts.join("/"));
+    setCurrentPath(parts.join('/'));
   }
 
   function goToCrumb(idx) {
-    if (idx < 0) return setCurrentPath("");
-    setCurrentPath(crumbs.slice(0, idx + 1).join("/"));
+    if (idx < 0) return setCurrentPath('');
+    setCurrentPath(crumbs.slice(0, idx + 1).join('/'));
   }
 
   function openChild(seg) {
@@ -57,18 +66,18 @@ export default function DocumentsBrowser({
 
   async function refreshFiles() {
     let q = supabase
-      .from("documents")
-      .select("*")
-      .eq("building_id", buildingId)
-      .eq("is_folder", false)
-      .order("created_at", { ascending: false });
+      .from('documents')
+      .select('*')
+      .eq('building_id', buildingId)
+      .eq('is_folder', false)
+      .order('created_at', { ascending: false });
 
-    if (currentPath) q = q.eq("folder", currentPath);
-    else q = q.or("folder.eq.,folder.is.null");
+    if (currentPath) q = q.eq('folder', currentPath);
+    else q = q.or('folder.eq.,folder.is.null');
 
     const { data, error } = await q;
     if (error) {
-      console.error("Error loading documents:", error);
+      console.error('Error loading documents:', error);
       setDocs([]);
       return;
     }
@@ -76,39 +85,43 @@ export default function DocumentsBrowser({
   }
 
   async function refreshFolders() {
-    const pref = currentPath ? `${currentPath}/` : "";
+    const pref = currentPath ? `${currentPath}/` : '';
     const likePattern = `${pref}%`;
 
     const { data, error } = await supabase
-      .from("documents")
-      .select("id, folder, title, is_folder")
-      .eq("building_id", buildingId)
-      .eq("is_folder", true)
-      .like("folder", likePattern);
+      .from('documents')
+      .select('id, folder, title, is_folder')
+      .eq('building_id', buildingId)
+      .eq('is_folder', true)
+      .like('folder', likePattern);
 
     if (error) {
-      console.error("Error loading folder list:", error);
+      console.error('Error loading folder list:', error);
       setChildFolders([]);
       return;
     }
 
     const rows = data || [];
-    const looksLikeParentModel = rows.some((r) => (r.folder || "") === (currentPath || ""));
+    const looksLikeParentModel = rows.some(
+      (r) => (r.folder || '') === (currentPath || '')
+    );
 
     let items = [];
 
     if (looksLikeParentModel) {
-      const immediate = rows.filter((r) => (r.folder || "") === (currentPath || ""));
+      const immediate = rows.filter(
+        (r) => (r.folder || '') === (currentPath || '')
+      );
       items = immediate
         .map((r) => ({ id: r.id, segment: r.title, title: r.title }))
         .sort((a, b) => a.title.localeCompare(b.title));
     } else {
       const immediateSegs = new Set();
       rows.forEach((row) => {
-        const f = row.folder || "";
+        const f = row.folder || '';
         if (!f.startsWith(pref)) return;
         const remainder = f.slice(pref.length);
-        if (!remainder || remainder.includes("/")) return;
+        if (!remainder || remainder.includes('/')) return;
         immediateSegs.add(remainder);
       });
 
@@ -142,20 +155,25 @@ export default function DocumentsBrowser({
   if (!session || !buildingId) return <p className="p-6">Loading…</p>;
 
   return (
-    <div className="absolute inset-y-0 left-16 right-0 overflow-auto bg-background p-6 space-y-6">
+    <div className="absolute inset-y-0 left-0 md:left-16 right-0 overflow-auto bg-background p-6 space-y-6">
       <Card className="mt-14">
         <CardHeader className="space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             {/* Breadcrumbs */}
             <div className="flex items-center gap-2 text-sm">
-              <Button size="icon" variant="ghost" aria-label="Go up" onClick={goUp}>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Go up"
+                onClick={goUp}
+              >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
 
               <Button
-                variant={currentPath === "" ? "secondary" : "ghost"}
+                variant={currentPath === '' ? 'secondary' : 'ghost'}
                 size="sm"
-                onClick={() => setCurrentPath("")}
+                onClick={() => setCurrentPath('')}
               >
                 <Home className="h-4 w-4 mr-1" /> Home
               </Button>
@@ -164,7 +182,7 @@ export default function DocumentsBrowser({
                 <React.Fragment key={`${seg}-${i}`}>
                   <ChevronRight className="h-4 w-4" />
                   <Button
-                    variant={i === crumbs.length - 1 ? "secondary" : "ghost"}
+                    variant={i === crumbs.length - 1 ? 'secondary' : 'ghost'}
                     size="sm"
                     onClick={() => goToCrumb(i)}
                   >
@@ -182,7 +200,6 @@ export default function DocumentsBrowser({
               capabilities,
             })}
           </div>
-
         </CardHeader>
 
         <CardContent>

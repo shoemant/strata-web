@@ -144,7 +144,7 @@ export default function ManagerResourcesPage() {
   if (loading) return <p className="p-6">Loading…</p>;
 
   return (
-    <div className="absolute top-16 bottom-0 left-16 right-0 overflow-auto bg-background">
+    <div className="absolute top-16 bottom-0 left-0 md:left-16 right-0 overflow-auto bg-background">
       <main className="p-6 space-y-6">
         {/* Header + CTAs */}
         <div className="flex items-center justify-between gap-3 flex-wrap">

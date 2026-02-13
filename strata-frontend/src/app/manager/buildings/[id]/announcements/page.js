@@ -359,7 +359,7 @@ export default function AnnouncementsPage() {
   };
 
   return (
-    <div className="absolute left-16 right-0 top-16 bottom-0 bg-background p-6 space-y-12 overflow-auto">
+    <div className="absolute left-0 md:left-16 right-0 top-16 bottom-0 bg-background p-6 space-y-12 overflow-auto">
       {/* Floating success/error banner */}
       {banner && (
         <div

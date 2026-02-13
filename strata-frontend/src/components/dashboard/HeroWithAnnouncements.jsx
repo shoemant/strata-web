@@ -33,7 +33,8 @@ export default function HeroWithAnnouncements({
   ];
 
   return (
-    <section className="relative z-10 pb-6 md:pb-0">
+    // Removed pb-6 on mobile (kept md:pb-0 as-is since desktop unchanged)
+    <section className="relative z-10 md:pb-0">
       <AnnouncementsDeck items={deckItems} href={announcementsHref} />
     </section>
   );
@@ -81,7 +82,7 @@ function AnnouncementsDeck({ items, href }) {
     <div
       ref={containerRef}
       className="
-        relative group w-full overflow-hidden rounded-2xl border border-border/20 bg-black
+        relative group w-full overflow-hidden md:rounded-2xl border border-border/20 bg-black
         transition-[height] duration-700 ease-[cubic-bezier(0.45,0,0.55,1)]
       "
     >
@@ -134,14 +135,12 @@ function BuildingSlide({ active }) {
           <img
             src={active.image_url}
             alt="Building"
-            className="block w-full h-auto object-contain select-none max-h-[68vh] sm:max-h-[70vh] md:max-h-[72vh] lg:max-h-[75vh]"
+            className="block w-full h-auto object-contain select-none md:max-h-[72vh] lg:max-h-[75vh]"
             loading="eager"
             decoding="async"
-            draggable={false} // ← add
-            onDragStart={(e) => e.preventDefault()} // ← add
+            draggable={false}
+            onDragStart={(e) => e.preventDefault()}
           />
-
-          {/* ✅ Overlay removed */}
         </>
       ) : (
         <div className="block w-full h-[44vh] sm:h-[48vh] md:h-[52vh] lg:h-[56vh] bg-gradient-to-br from-primary/40 via-primary/20 to-primary/10" />
@@ -164,10 +163,10 @@ function AnnouncementSlide({ active, href }) {
       })
     : null;
 
-  // Give a touch more headroom when we show a date pill
+  // Mobile: no max-h cap so full image shows; md+ keeps the original caps
   const imgMaxH = hasDate
-    ? 'max-h-[76vh] sm:max-h-[78vh] md:max-h-[80vh] lg:max-h-[82vh]'
-    : 'max-h-[68vh] sm:max-h-[70vh] md:max-h-[72vh] lg:max-h-[75vh]';
+    ? 'md:max-h-[80vh] lg:max-h-[82vh]'
+    : 'md:max-h-[72vh] lg:max-h-[75vh]';
 
   return (
     <div className="block relative">
@@ -182,8 +181,8 @@ function AnnouncementSlide({ active, href }) {
             ].join(' ')}
             loading="lazy"
             decoding="async"
-            draggable={false} // ← add
-            onDragStart={(e) => e.preventDefault()} // ← add
+            draggable={false}
+            onDragStart={(e) => e.preventDefault()}
           />
         ) : (
           <div
@@ -196,8 +195,9 @@ function AnnouncementSlide({ active, href }) {
           />
         )}
 
-        {/* Text stack - pushed to bottom-left */}
-        <div className="absolute inset-0 z-20 flex flex-col justify-end px-4 sm:px-6 md:px-8 pb-[6vh] pointer-events-none">
+        {/* Text stack - pinned to bottom. Uses absolute on the img wrapper,
+            but we also need a gradient scrim so text is always readable */}
+        <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/60 via-black/20 to-transparent pt-16 pb-[5vh] px-4 sm:px-6 md:px-8 pointer-events-none flex flex-col justify-end">
           <div className="space-y-2 text-white max-w-[90%] sm:max-w-[75%] md:max-w-[60%]">
             <div
               className="

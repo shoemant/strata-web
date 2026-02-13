@@ -347,7 +347,7 @@ export default function OwnerDashboard() {
 
   if (loading) {
     return (
-      <div className="absolute top-16 bottom-0 left-16 right-0 bg-background px-4 md:px-6 lg:px-8 py-6 overflow-auto">
+      <div className="absolute top-16 bottom-0 left-0 md:left-16 right-0 bg-background px-4 md:px-6 lg:px-8 py-6 overflow-auto">
         <div className="max-w-7xl mx-auto space-y-6">
           <Skeleton className="h-[280px] w-full rounded-2xl" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -368,10 +368,10 @@ export default function OwnerDashboard() {
 
   return (
     <ProtectedRoute allowedRoles={['owner']}>
-      <div className="absolute top-0 bottom-0 left-16 right-0 bg-background px-4 md:px-6 lg:px-8 py-6 overflow-auto">
+      <div className="absolute top-0 bottom-0 left-0 md:left-16 right-0 bg-background px-4 md:px-6 lg:px-8 py-6 pt-[4rem] md:pt-6 overflow-auto">
         <div className="w-full mx-auto space-y-4">
           <div className="absolute inset-0 bg-[url('/abstract-geometric-pattern.png')] opacity-[0.02] bg-cover bg-center" />
-          <div className="relative p-6 md:p-8">
+          <div className="relative md:p-8">
             <HeroWithAnnouncements
               imageUrl={building?.hero_image_url}
               announcements={announcements}
