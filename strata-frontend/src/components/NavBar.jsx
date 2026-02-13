@@ -564,56 +564,59 @@ function NavContent({
     pathname === href || pathname.startsWith(`${href}/`);
 
   return (
-    <>
-      <div className="relative flex-1">
-        <ScrollArea className="h-full px-2 py-3">
-          {(globalItems || []).map(({ href, icon: Icon, label }) => (
-            <NavLink
-              key={href}
-              href={href}
-              Icon={Icon}
-              label={label}
-              active={isActive(href)}
-              expanded={expanded}
-              labelIndent
-              onNavigate={onNavigate}
-            />
-          ))}
-
-          <BuildingSwitcherPopover
-            buildings={buildings || []}
-            activeBuildingId={activeBuildingId}
-            onSelect={onSwitchBuilding}
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Scrollable area */}
+      <ScrollArea className="flex-1 min-h-0 px-2 py-3">
+        {(globalItems || []).map(({ href, icon: Icon, label }) => (
+          <NavLink
+            key={href}
+            href={href}
+            Icon={Icon}
+            label={label}
+            active={isActive(href)}
             expanded={expanded}
-            show={(buildings || []).length > 1}
+            labelIndent
+            onNavigate={onNavigate}
           />
+        ))}
 
-          {(buildingItems || []).map(({ href, icon: Icon, label }) => (
-            <NavLink
-              key={href}
-              href={href}
-              Icon={Icon}
-              label={label}
-              active={isActive(href)}
-              expanded={expanded}
-              labelIndent
-              onNavigate={onNavigate}
-            />
-          ))}
-        </ScrollArea>
+        <BuildingSwitcherPopover
+          buildings={buildings || []}
+          activeBuildingId={activeBuildingId}
+          onSelect={onSwitchBuilding}
+          expanded={expanded}
+          show={(buildings || []).length > 1}
+        />
+
+        {(buildingItems || []).map(({ href, icon: Icon, label }) => (
+          <NavLink
+            key={href}
+            href={href}
+            Icon={Icon}
+            label={label}
+            active={isActive(href)}
+            expanded={expanded}
+            labelIndent
+            onNavigate={onNavigate}
+          />
+        ))}
+      </ScrollArea>
+
+      {/* Sticky bottom */}
+      <div className="shrink-0">
+        <Separator className="my-2" />
+        <div className="px-2 pb-3">
+          <NavLink
+            Icon={LogOut}
+            label="Logout"
+            expanded={expanded}
+            active={false}
+            onClick={onLogout}
+            onNavigate={onNavigate}
+          />
+        </div>
       </div>
-
-      <Separator className="my-2" />
-
-      <NavLink
-        Icon={LogOut}
-        label="Logout"
-        expanded={expanded}
-        active={false}
-        onClick={onLogout}
-        onNavigate={onNavigate}
-      />
-    </>
+    </div>
   );
 }
 
