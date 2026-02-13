@@ -27,12 +27,12 @@ export default function GlobalHeader({ title, rightSlot, leftSlot }) {
       className="sticky top-0 z-30 glass-effect border-b border-border/30 h-16"
       style={{ ['--header-h']: '4rem' }}
     >
-      <div className="w-full px-6 py-4">
+      <div className="w-full px-4 md:px-6 py-4">
         <div className="flex items-center justify-between gap-4">
           {/* Left side */}
-          <div className="flex items-center gap-4 min-w-0">
+          <div className="flex items-center gap-2 md:gap-4 min-w-0">
             {leftSlot}
-            <h1 className="text-xl font-semibold text-foreground truncate">
+            <h1 className="text-xl font-semibold text-foreground truncate min-w-0 flex-1">
               {title ?? autoTitle}
             </h1>
           </div>

@@ -118,6 +118,14 @@ function formatHHMMToAMPM(hhmm) {
   return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+function startTimeFromBookingStartAt(bookingStartAt) {
+  const start = parseLocalTimestamp(bookingStartAt);
+  if (!start) return null;
+  const hh = String(start.getHours()).padStart(2, '0');
+  const mm = String(start.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}:00`;
+}
+
 export default function ManagerBookResourcePage() {
   const params = useParams();
   const buildingId = Array.isArray(params?.id) ? params.id[0] : params?.id;
@@ -179,7 +187,7 @@ export default function ManagerBookResourcePage() {
       const { data, error } = await supabase
         .from('resources')
         .select(
-          'id, name, is_active, total_spots, booking_interval_minutes, building_id'
+          'id, name, is_active, total_spots, booking_interval_minutes, building_id, is_paid, cost_cents'
         )
         .eq('id', resourceId)
         .eq('building_id', buildingId)
@@ -494,28 +502,41 @@ export default function ManagerBookResourcePage() {
     : null;
 
   async function handleBook() {
-    // ✅ GUARANTEE correct user at click time
     const bookingUserId = targetUserId ?? user?.id;
     if (!bookingStartAt || !bookingUserId || !resourceId) return;
 
+    // compute start time
+    const startTime = startTimeFromBookingStartAt(bookingStartAt);
+    if (!startTime) {
+      setError('Could not parse selected time.');
+      return;
+    }
+
+    // ✅ If paid, go to payment page instead of booking immediately
+    if (resource?.is_paid) {
+      const qs = new URLSearchParams({
+        resourceId,
+        buildingId,
+        date: selectedDateStr,
+        startTime,
+        userId: bookingUserId,
+      });
+
+      router.push(
+        `/manager/buildings/${buildingId}/resources/${resourceId}/pay?${qs.toString()}`
+      );
+      return;
+    }
+
+    // Otherwise, book normally
     try {
       setSubmitting(true);
       setError(null);
 
-      const start = parseLocalTimestamp(bookingStartAt);
-      if (!start) {
-        setError('Could not parse selected time.');
-        return;
-      }
-
-      const hh = String(start.getHours()).padStart(2, '0');
-      const mm = String(start.getMinutes()).padStart(2, '0');
-      const startTime = `${hh}:${mm}:00`;
-
       const { error: bookErr } = await supabase.rpc('fn_book_resource_slot', {
         p_resource: resourceId,
         p_date: selectedDateStr,
-        p_user: bookingUserId, // ✅ use selected user
+        p_user: bookingUserId,
         p_start_time: startTime,
       });
 
@@ -559,6 +580,11 @@ export default function ManagerBookResourcePage() {
                 Capacity: {resource.total_spots} ·{' '}
                 {resource.booking_interval_minutes}-min slots
               </div>
+              {resource.is_paid ? (
+                <div className="text-sm text-muted-foreground">
+                  Cost: ${(resource.cost_cents / 100).toFixed(2)} CAD
+                </div>
+              ) : null}
             </div>
 
             <Badge variant={resource.is_active ? 'default' : 'secondary'}>

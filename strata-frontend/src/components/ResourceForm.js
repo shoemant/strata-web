@@ -39,8 +39,28 @@ export default function ResourceForm({ initial = {}, onSave, buildingId }) {
     max_slots_per_user_per_day: 2,
     is_active: true,
     image_path: null,
+
+    is_paid: false,
+    cost_dollars: '',
+
     ...initial,
   });
+
+  const parseCostToCents = (value) => {
+    const trimmed = (value || '').trim();
+    if (!trimmed) return null;
+
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n < 0) return NaN;
+
+    return Math.round(n * 100);
+  };
+
+  useEffect(() => {
+    if (!values.is_paid && values.cost_dollars) {
+      setValues((v) => ({ ...v, cost_dollars: '' }));
+    }
+  }, [values.is_paid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [types, setTypes] = useState([]);
   const [addingType, setAddingType] = useState(false);
@@ -105,14 +125,29 @@ export default function ResourceForm({ initial = {}, onSave, buildingId }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Convert UI dollars → cents
+    const cost_cents = values.is_paid
+      ? parseCostToCents(values.cost_dollars)
+      : null;
+
+    if (values.is_paid && (cost_cents === null || Number.isNaN(cost_cents))) {
+      alert('Enter a valid cost (e.g., 10 or 10.50).');
+      return;
+    }
+
+    // Remove UI-only field before saving
+    const { cost_dollars, ...rest } = values;
+
     const payload = {
-      ...values,
+      ...rest,
       total_spots: Number(values.total_spots),
       booking_interval_minutes: Number(values.booking_interval_minutes),
       max_slots_per_user_per_day: values.max_slots_per_user_per_day
         ? Number(values.max_slots_per_user_per_day)
         : null,
       is_active: Boolean(values.is_active),
+      is_paid: Boolean(values.is_paid),
+      cost_cents,
     };
 
     const saved = await onSave(payload); // parent should return saved { id, ... }
@@ -396,7 +431,7 @@ export default function ResourceForm({ initial = {}, onSave, buildingId }) {
           <CardHeader>
             <CardTitle>Capacity & Limits</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-3">
+          <CardContent className="grid gap-4 md:grid-cols-4">
             <div className="space-y-2">
               <Label>Total spots</Label>
               <Input
@@ -431,6 +466,36 @@ export default function ResourceForm({ initial = {}, onSave, buildingId }) {
                 value={values.max_slots_per_user_per_day ?? ''}
                 onChange={handleChange}
               />
+            </div>
+
+            <div className="space-y-2 md:col-span-4">
+              <div className="flex items-center gap-3">
+                <input
+                  id="is_paid"
+                  type="checkbox"
+                  checked={!!values.is_paid}
+                  onChange={(e) =>
+                    setValues((v) => ({ ...v, is_paid: e.target.checked }))
+                  }
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="is_paid">This amenity costs money</Label>
+              </div>
+
+              {values.is_paid && (
+                <div className="max-w-xs space-y-2 mt-3">
+                  <Label htmlFor="cost_dollars">Cost (CAD)</Label>
+                  <Input
+                    id="cost_dollars"
+                    name="cost_dollars"
+                    inputMode="decimal"
+                    placeholder="e.g., 10 or 10.50"
+                    value={values.cost_dollars || ''}
+                    onChange={handleChange}
+                  />
+                  <p className="text-xs text-muted-foreground">Enter dollars</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

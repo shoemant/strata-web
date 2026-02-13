@@ -30,7 +30,19 @@ import {
   Wrench,
   ChevronRight,
   ChevronLeft,
+  Menu,
 } from 'lucide-react';
+
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
+
+import { useHeaderActions } from '@/context/HeaderActionsContext';
 
 const GUTTER = 50; // collapsed sidebar width
 const ICON_BOX = 48; // actual icon box size
@@ -414,10 +426,6 @@ export default function NavBar() {
     router.push(`/${role}/buildings/${nextBuildingId}/${safeRest}`);
   }
 
-  useEffect(() => {
-    if (isTouch) setPinnedOpen(false);
-  }, [pathname, isTouch]);
-
   const handleNavigate = () => {
     if (isTouch) setPinnedOpen(false);
   };
@@ -426,129 +434,186 @@ export default function NavBar() {
 
   return (
     <TooltipProvider>
-      <aside
-        onPointerEnter={(e) => {
-          if (e.pointerType === 'mouse') setHoverOpen(true);
-        }}
-        onPointerLeave={(e) => {
-          if (e.pointerType === 'mouse') setHoverOpen(false);
-        }}
-        className={[
-          'fixed top-0 left-0 z-50 h-screen',
-          'bg-background border-r shadow-md',
-          'flex flex-col overflow-hidden',
-          'transition-[width] duration-200 ease-in-out',
-          expanded ? 'w-64' : 'w-20',
-        ].join(' ')}
-      >
-        {/* Header */}
-        <div className="px-2 py-3 relative">
-          <div className="flex items-center justify-center h-16">
-            <Link
-              href="/"
-              aria-label="Home"
-              className="block"
-              onClick={handleNavigate}
-            >
-              <div className={`relative h-8 ${expanded ? 'w-40' : 'w-10'}`}>
-                <Image
-                  src="/images/logo-compact.png"
-                  alt="My Building Logo (compact)"
-                  fill
-                  priority
-                  className={[
-                    'object-contain transition-opacity duration-200 ease-in-out',
-                    expanded ? 'opacity-0' : 'opacity-100',
-                  ].join(' ')}
-                  aria-hidden={expanded ? 'true' : 'false'}
-                />
-                <Image
-                  src="/images/logo.png"
-                  alt="My Building Logo"
-                  fill
-                  priority
-                  className={[
-                    'object-contain transition-opacity duration-200 ease-in-out',
-                    expanded ? 'opacity-100' : 'opacity-0',
-                  ].join(' ')}
-                  aria-hidden={expanded ? 'false' : 'true'}
-                />
-              </div>
-            </Link>
-          </div>
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={pinnedOpen ? 'Unpin sidebar' : 'Pin sidebar open'}
-            onClick={() => setPinnedOpen((v) => !v)}
-            className="absolute right-1 top-1/2 -translate-y-1/2 hover:bg-transparent focus-visible:bg-transparent active:bg-transparent"
-          >
-            {expanded ? (
-              <ChevronLeft className="h-5 w-5" />
-            ) : (
-              <ChevronRight className="h-5 w-5" />
-            )}
-          </Button>
-        </div>
-
-        <Separator />
-
-        {/* Scrollable nav */}
-        <div className="relative flex-1">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-3 bg-gradient-to-b from-background to-transparent z-10" />
-          <ScrollArea className="h-full px-2 py-3">
-            {(globalItems || []).map(({ href, icon: Icon, label }) => (
-              <NavLink
-                key={href}
-                href={href}
-                Icon={Icon}
-                label={label}
-                active={isActive(href)}
-                expanded={expanded}
-                labelIndent
-                onNavigate={handleNavigate}
-              />
-            ))}
-
-            <BuildingSwitcherPopover
-              buildings={buildings || []}
+      <>
+        {/* ========================= */}
+        {/* Mobile: hamburger + drawer */}
+        {/* ========================= */}
+        <MobileHeaderMenuSlot>
+          {({ close }) => (
+            <NavContent
+              expanded={true}
+              globalItems={globalItems}
+              buildingItems={buildingItems}
+              buildings={buildings}
               activeBuildingId={activeBuildingId}
-              onSelect={handleSwitchBuilding}
-              expanded={expanded}
-              show={(buildings || []).length > 1}
+              onSwitchBuilding={(id) => {
+                handleSwitchBuilding(id);
+                close();
+              }}
+              onNavigate={close}
+              onLogout={() => {
+                supabase.auth.signOut();
+                close();
+              }}
             />
+          )}
+        </MobileHeaderMenuSlot>
 
-            {(buildingItems || []).map(({ href, icon: Icon, label }) => (
-              <NavLink
-                key={href}
-                href={href}
-                Icon={Icon}
-                label={label}
-                active={isActive(href)}
-                expanded={expanded}
-                labelIndent
-                onNavigate={handleNavigate}
-              />
-            ))}
-          </ScrollArea>
+        {/* ===================== */}
+        {/* Desktop: your sidebar */}
+        {/* ===================== */}
+        <div className="hidden md:block">
+          <aside
+            onPointerEnter={(e) => {
+              if (e.pointerType === 'mouse') setHoverOpen(true);
+            }}
+            onPointerLeave={(e) => {
+              if (e.pointerType === 'mouse') setHoverOpen(false);
+            }}
+            className={[
+              'fixed top-0 left-0 z-50 h-screen',
+              'bg-background border-r shadow-md',
+              'flex flex-col overflow-hidden',
+              'transition-[width] duration-200 ease-in-out',
+              expanded ? 'w-64' : 'w-20',
+            ].join(' ')}
+          >
+            {/* Header (your existing header block) */}
+            <div className="px-2 py-3 relative">
+              <div className="flex items-center justify-center h-16">
+                <Link
+                  href="/"
+                  aria-label="Home"
+                  className="block"
+                  onClick={handleNavigate}
+                >
+                  <div className={`relative h-8 ${expanded ? 'w-40' : 'w-10'}`}>
+                    <Image
+                      src="/images/logo-compact.png"
+                      alt="My Building Logo (compact)"
+                      fill
+                      priority
+                      className={[
+                        'object-contain transition-opacity duration-200 ease-in-out',
+                        expanded ? 'opacity-0' : 'opacity-100',
+                      ].join(' ')}
+                      aria-hidden={expanded ? 'true' : 'false'}
+                    />
+                    <Image
+                      src="/images/logo.png"
+                      alt="My Building Logo"
+                      fill
+                      priority
+                      className={[
+                        'object-contain transition-opacity duration-200 ease-in-out',
+                        expanded ? 'opacity-100' : 'opacity-0',
+                      ].join(' ')}
+                      aria-hidden={expanded ? 'false' : 'true'}
+                    />
+                  </div>
+                </Link>
+              </div>
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-background to-transparent" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={pinnedOpen ? 'Unpin sidebar' : 'Pin sidebar open'}
+                onClick={() => setPinnedOpen((v) => !v)}
+                className="absolute right-1 top-1/2 -translate-y-1/2 hover:bg-transparent focus-visible:bg-transparent active:bg-transparent"
+              >
+                {expanded ? (
+                  <ChevronLeft className="h-5 w-5" />
+                ) : (
+                  <ChevronRight className="h-5 w-5" />
+                )}
+              </Button>
+            </div>
+
+            <Separator />
+
+            <NavContent
+              expanded={expanded}
+              globalItems={globalItems}
+              buildingItems={buildingItems}
+              buildings={buildings}
+              activeBuildingId={activeBuildingId}
+              onSwitchBuilding={handleSwitchBuilding}
+              onNavigate={handleNavigate}
+              onLogout={() => supabase.auth.signOut()}
+            />
+          </aside>
         </div>
-
-        <Separator className="my-2" />
-
-        <NavLink
-          Icon={LogOut}
-          label="Logout"
-          expanded={expanded}
-          active={false}
-          onClick={() => supabase.auth.signOut()}
-          onNavigate={handleNavigate}
-        />
-      </aside>
+      </>
     </TooltipProvider>
+  );
+}
+
+function NavContent({
+  expanded,
+  globalItems,
+  buildingItems,
+  buildings,
+  activeBuildingId,
+  onSwitchBuilding,
+  onNavigate,
+  onLogout,
+}) {
+  const pathname = usePathname();
+  const isActive = (href) =>
+    pathname === href || pathname.startsWith(`${href}/`);
+
+  return (
+    <>
+      <div className="relative flex-1">
+        <ScrollArea className="h-full px-2 py-3">
+          {(globalItems || []).map(({ href, icon: Icon, label }) => (
+            <NavLink
+              key={href}
+              href={href}
+              Icon={Icon}
+              label={label}
+              active={isActive(href)}
+              expanded={expanded}
+              labelIndent
+              onNavigate={onNavigate}
+            />
+          ))}
+
+          <BuildingSwitcherPopover
+            buildings={buildings || []}
+            activeBuildingId={activeBuildingId}
+            onSelect={onSwitchBuilding}
+            expanded={expanded}
+            show={(buildings || []).length > 1}
+          />
+
+          {(buildingItems || []).map(({ href, icon: Icon, label }) => (
+            <NavLink
+              key={href}
+              href={href}
+              Icon={Icon}
+              label={label}
+              active={isActive(href)}
+              expanded={expanded}
+              labelIndent
+              onNavigate={onNavigate}
+            />
+          ))}
+        </ScrollArea>
+      </div>
+
+      <Separator className="my-2" />
+
+      <NavLink
+        Icon={LogOut}
+        label="Logout"
+        expanded={expanded}
+        active={false}
+        onClick={onLogout}
+        onNavigate={onNavigate}
+      />
+    </>
   );
 }
 
@@ -569,14 +634,12 @@ function NavLink({
       className="grid items-center w-full"
       style={{ gridTemplateColumns: `50px 1fr` }}
     >
-      {/* Icon */}
       <div className="flex items-center justify-center w-full">
         <div className="flex items-center justify-center w-12 h-12">
           <Icon className="h-6 w-6" />
         </div>
       </div>
 
-      {/* Label */}
       <div
         className={[
           'overflow-hidden flex items-center transition-[max-width,opacity,transform,padding-left] duration-200 ease-in-out',
@@ -601,8 +664,42 @@ function NavLink({
     if (onNavigate) onNavigate();
   };
 
+  // ✅ MOBILE / EXPANDED: no tooltip wrapper at all
+  if (expanded) {
+    return href ? (
+      <Button
+        asChild
+        size="sm"
+        variant={active ? 'secondary' : 'ghost'}
+        className={baseClasses}
+        data-active={active ? 'true' : 'false'}
+        aria-label={label}
+      >
+        <Link
+          href={href}
+          aria-current={active ? 'page' : undefined}
+          onClick={handleClick}
+        >
+          {content}
+        </Link>
+      </Button>
+    ) : (
+      <Button
+        size="sm"
+        variant="ghost"
+        className={baseClasses}
+        onClick={handleClick}
+        aria-label={label}
+        data-active={active ? 'true' : 'false'}
+      >
+        {content}
+      </Button>
+    );
+  }
+
+  // ✅ COLLAPSED DESKTOP: tooltip enabled (requires provider)
   return (
-    <Tooltip disableHoverableContent={expanded}>
+    <Tooltip>
       <TooltipTrigger asChild>
         {href ? (
           <Button
@@ -635,9 +732,74 @@ function NavLink({
         )}
       </TooltipTrigger>
 
-      {!expanded && <TooltipContent side="right">{label}</TooltipContent>}
+      <TooltipContent side="right">{label}</TooltipContent>
     </Tooltip>
   );
+}
+
+function MobileHeaderMenuSlot({ children }) {
+  const { setLeftSlot } = useHeaderActions(); // your context must expose this
+  const [open, setOpen] = useState(false);
+
+  const slot = useMemo(() => {
+    return (
+      <div className="md:hidden">
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label="Open menu"
+              className="
+    md:hidden
+    p-3
+    rounded-xl
+    active:scale-95
+    transition
+    flex-shrink-0
+  "
+            >
+              <Menu className="h-6 w-6 stroke-[2.25]" />
+            </Button>
+          </SheetTrigger>
+
+          <SheetContent side="left" className="w-[85vw] max-w-sm p-0">
+            <SheetHeader className="px-4 py-4 border-b border-border">
+              <SheetTitle className="sr-only">Navigation menu</SheetTitle>
+              <SheetDescription className="sr-only">
+                Use this menu to navigate between pages.
+              </SheetDescription>
+
+              <div className="flex items-center gap-3">
+                <div className="relative h-8 w-36">
+                  <Image
+                    src="/images/logo.png"
+                    alt="My Building Logo"
+                    fill
+                    priority
+                    className="object-contain"
+                  />
+                </div>
+              </div>
+            </SheetHeader>
+
+            <div className="flex h-[calc(100vh-65px)] flex-col">
+              {typeof children === 'function'
+                ? children({ close: () => setOpen(false) })
+                : children}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    );
+  }, [open, children]);
+
+  useEffect(() => {
+    setLeftSlot(slot);
+    return () => setLeftSlot(null);
+  }, [setLeftSlot, slot]);
+
+  return null;
 }
 
 function BuildingSwitcherPopover({

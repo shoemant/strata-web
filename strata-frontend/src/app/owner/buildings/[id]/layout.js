@@ -96,7 +96,7 @@ export default function OwnerBuildingLayout({ children }) {
         <HeaderActionsProvider>
           <OwnerBuildingContext.Provider value={value}>
             <NavBar />
-            <div className="owner-shell min-w-0 w-full pl-20">
+            <div className="owner-shell min-w-0 w-full pl-0 md:pl-20">
               <HeaderFromContext />
               <main className="min-h-screen bg-background transition-colors duration-500 ease-in-out w-full max-w-none overflow-x-hidden">
                 {children}

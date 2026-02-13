@@ -56,6 +56,27 @@ function formatDateNice(dateStr) {
   }).format(new Date(y, m - 1, d));
 }
 
+function formatMoneyFromCents(cents) {
+  if (cents == null) return null;
+  const dollars = cents / 100;
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'CAD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(dollars);
+}
+
+function PriceBadge({ isPaid, costCents }) {
+  const label = isPaid ? formatMoneyFromCents(costCents) || 'Paid' : 'Free';
+
+  return (
+    <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium">
+      {label}
+    </span>
+  );
+}
+
 /* -------------------- Hours -------------------- */
 
 function HoursCollapsible({ availability }) {
@@ -340,9 +361,18 @@ export default function ManagerBookingsHomePage() {
                       />
                     </div>
                   )}
-                  <CardHeader>
-                    <CardTitle>{r.name}</CardTitle>
+                  <CardHeader className="space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <CardTitle className="min-w-0 truncate">
+                        {r.name}
+                      </CardTitle>
+                      <PriceBadge
+                        isPaid={!!r.is_paid}
+                        costCents={r.cost_cents}
+                      />
+                    </div>
                   </CardHeader>
+
                   <CardContent className="space-y-3">
                     <HoursCollapsible
                       availability={availabilityByResource.get(r.id)}
