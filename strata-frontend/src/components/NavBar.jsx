@@ -489,7 +489,7 @@ export default function NavBar() {
                 >
                   <div className={`relative h-8 ${expanded ? 'w-40' : 'w-10'}`}>
                     <Image
-                      src="/images/logo-compact.png"
+                      src="/images/logo-compact-v2.png"
                       alt="My Building Logo (compact)"
                       fill
                       priority

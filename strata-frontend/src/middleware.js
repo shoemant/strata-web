@@ -51,7 +51,7 @@ export async function middleware(request) {
     // public images
     '/images/apartment.svg',
     '/images/logo.png',
-    '/images/logo-compact.png',
+    '/images/logo-compact-v2.png',
     '/images/logo-cropped.png',
     '/images/apartment-dark.svg',
     '/images/apartment-dark-rescaled.svg',
