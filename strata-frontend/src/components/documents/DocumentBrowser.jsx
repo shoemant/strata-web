@@ -9,21 +9,19 @@ import {
   ChevronLeft,
   ChevronRight,
   Home,
-  FolderPlus,
+  Folder,
   File as FileIcon,
 } from 'lucide-react';
 
 /**
+ * Generic documents browser:
+ * - Navigates by parent_id (tree model)
+ * - Visibility handled by RLS (documents rows are filtered automatically)
+ *
  * @param {Object} props
  * @param {string} props.buildingId
  * @param {Object} props.capabilities
- * @param {boolean} props.capabilities.canUpload
- * @param {boolean} props.capabilities.canCreateFolder
- * @param {boolean} props.capabilities.canRename
- * @param {boolean} props.capabilities.canDelete
- * @param {(ctx: {buildingId: string, currentPath: string, refresh: () => Promise<void>}) => React.ReactNode} [props.renderActions]
- *        Optional: render role-specific action buttons (Upload/Create/Rename/Delete UI).
- *        This keeps the browser generic.
+ * @param {(ctx: {buildingId: string, currentFolderId: string|null, crumbs: Array<{id:string,title:string}>, refresh: () => Promise<void>, capabilities: any}) => React.ReactNode} [props.renderActions]
  */
 export default function DocumentsBrowser({
   buildingId,
@@ -33,47 +31,88 @@ export default function DocumentsBrowser({
   const supabase = useSupabaseClient();
   const session = useSession();
 
-  const [currentPath, setCurrentPath] = useState('');
+  const isAuthed = Boolean(session?.user?.id);
+
+  // crumbs = [{id,title}] => currentFolderId = last id or null root
+  const [crumbs, setCrumbs] = useState([]);
+  const currentFolderId = crumbs.length ? crumbs[crumbs.length - 1].id : null;
+
   const [childFolders, setChildFolders] = useState([]);
   const [docs, setDocs] = useState([]);
 
-  const isAuthed = Boolean(session?.user?.id);
+  // Optional: show restricted badge if ACL exists on the item itself.
+  // (RLS already enforces visibility; this is just UI signal.)
+  const showRestrictedBadges = Boolean(capabilities?.canManageVisibility); // you decide
 
-  const crumbs = useMemo(
-    () => (currentPath ? currentPath.split('/').filter(Boolean) : []),
-    [currentPath]
-  );
-  const prefix = useMemo(
-    () => (currentPath ? `${currentPath}/` : ''),
-    [currentPath]
-  );
+  const goHome = () => setCrumbs([]);
+  const goUp = () => setCrumbs((prev) => prev.slice(0, -1));
+  const goToCrumb = (idx) => {
+    if (idx < 0) return goHome();
+    setCrumbs((prev) => prev.slice(0, idx + 1));
+  };
+  const openChildFolder = (folderRow) => {
+    setCrumbs((prev) => [
+      ...prev,
+      { id: folderRow.id, title: folderRow.title },
+    ]);
+  };
 
-  function goUp() {
-    if (!currentPath) return;
-    const parts = currentPath.split('/').filter(Boolean);
-    parts.pop();
-    setCurrentPath(parts.join('/'));
-  }
+  async function refreshFolders() {
+    if (!buildingId || !isAuthed) return;
 
-  function goToCrumb(idx) {
-    if (idx < 0) return setCurrentPath('');
-    setCurrentPath(crumbs.slice(0, idx + 1).join('/'));
-  }
+    let q = supabase
+      .from('documents')
+      .select('id, title, is_folder, parent_id')
+      .eq('building_id', buildingId)
+      .eq('is_folder', true)
+      .order('title', { ascending: true });
 
-  function openChild(seg) {
-    setCurrentPath(currentPath ? `${currentPath}/${seg}` : seg);
+    if (currentFolderId) q = q.eq('parent_id', currentFolderId);
+    else q = q.is('parent_id', null);
+
+    const { data, error } = await q;
+    if (error) {
+      console.error('Error loading folders:', error);
+      setChildFolders([]);
+      return;
+    }
+
+    let folders = data || [];
+
+    // Optional: add restricted badge for managers
+    if (showRestrictedBadges && folders.length) {
+      const ids = folders.map((f) => f.id);
+      const { data: aclRows, error: aclErr } = await supabase
+        .from('document_acl')
+        .select('document_id')
+        .in('document_id', ids);
+
+      if (!aclErr) {
+        const restrictedSet = new Set(
+          (aclRows || []).map((r) => r.document_id)
+        );
+        folders = folders.map((f) => ({
+          ...f,
+          _restricted: restrictedSet.has(f.id),
+        }));
+      }
+    }
+
+    setChildFolders(folders);
   }
 
   async function refreshFiles() {
+    if (!buildingId || !isAuthed) return;
+
     let q = supabase
       .from('documents')
-      .select('*')
+      .select('id, title, url, created_at, parent_id, is_folder')
       .eq('building_id', buildingId)
       .eq('is_folder', false)
       .order('created_at', { ascending: false });
 
-    if (currentPath) q = q.eq('folder', currentPath);
-    else q = q.or('folder.eq.,folder.is.null');
+    if (currentFolderId) q = q.eq('parent_id', currentFolderId);
+    else q = q.is('parent_id', null);
 
     const { data, error } = await q;
     if (error) {
@@ -81,65 +120,29 @@ export default function DocumentsBrowser({
       setDocs([]);
       return;
     }
-    setDocs(data || []);
-  }
 
-  async function refreshFolders() {
-    const pref = currentPath ? `${currentPath}/` : '';
-    const likePattern = `${pref}%`;
+    let files = data || [];
 
-    const { data, error } = await supabase
-      .from('documents')
-      .select('id, folder, title, is_folder')
-      .eq('building_id', buildingId)
-      .eq('is_folder', true)
-      .like('folder', likePattern);
+    // Optional: add restricted badge for managers
+    if (showRestrictedBadges && files.length) {
+      const ids = files.map((f) => f.id);
+      const { data: aclRows, error: aclErr } = await supabase
+        .from('document_acl')
+        .select('document_id')
+        .in('document_id', ids);
 
-    if (error) {
-      console.error('Error loading folder list:', error);
-      setChildFolders([]);
-      return;
+      if (!aclErr) {
+        const restrictedSet = new Set(
+          (aclRows || []).map((r) => r.document_id)
+        );
+        files = files.map((f) => ({
+          ...f,
+          _restricted: restrictedSet.has(f.id),
+        }));
+      }
     }
 
-    const rows = data || [];
-    const looksLikeParentModel = rows.some(
-      (r) => (r.folder || '') === (currentPath || '')
-    );
-
-    let items = [];
-
-    if (looksLikeParentModel) {
-      const immediate = rows.filter(
-        (r) => (r.folder || '') === (currentPath || '')
-      );
-      items = immediate
-        .map((r) => ({ id: r.id, segment: r.title, title: r.title }))
-        .sort((a, b) => a.title.localeCompare(b.title));
-    } else {
-      const immediateSegs = new Set();
-      rows.forEach((row) => {
-        const f = row.folder || '';
-        if (!f.startsWith(pref)) return;
-        const remainder = f.slice(pref.length);
-        if (!remainder || remainder.includes('/')) return;
-        immediateSegs.add(remainder);
-      });
-
-      const titleBySeg = new Map();
-      immediateSegs.forEach((seg) => {
-        const exact = rows.find((r) => r.folder === `${pref}${seg}`);
-        titleBySeg.set(seg, (exact && exact.title) || seg);
-      });
-
-      items = Array.from(titleBySeg.entries())
-        .map(([segment, title]) => {
-          const exact = rows.find((r) => r.folder === `${pref}${segment}`);
-          return { id: exact ? exact.id : null, segment, title };
-        })
-        .sort((a, b) => a.title.localeCompare(b.title));
-    }
-
-    setChildFolders(items);
+    setDocs(files);
   }
 
   async function refreshAll() {
@@ -150,7 +153,7 @@ export default function DocumentsBrowser({
     if (!buildingId || !isAuthed) return;
     refreshAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildingId, isAuthed, supabase, currentPath]);
+  }, [buildingId, isAuthed, currentFolderId]);
 
   if (!session || !buildingId) return <p className="p-6">Loading…</p>;
 
@@ -166,27 +169,28 @@ export default function DocumentsBrowser({
                 variant="ghost"
                 aria-label="Go up"
                 onClick={goUp}
+                disabled={!crumbs.length}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
 
               <Button
-                variant={currentPath === '' ? 'secondary' : 'ghost'}
+                variant={crumbs.length === 0 ? 'secondary' : 'ghost'}
                 size="sm"
-                onClick={() => setCurrentPath('')}
+                onClick={goHome}
               >
                 <Home className="h-4 w-4 mr-1" /> Home
               </Button>
 
-              {crumbs.map((seg, i) => (
-                <React.Fragment key={`${seg}-${i}`}>
+              {crumbs.map((c, i) => (
+                <React.Fragment key={c.id}>
                   <ChevronRight className="h-4 w-4" />
                   <Button
                     variant={i === crumbs.length - 1 ? 'secondary' : 'ghost'}
                     size="sm"
                     onClick={() => goToCrumb(i)}
                   >
-                    {seg}
+                    {c.title}
                   </Button>
                 </React.Fragment>
               ))}
@@ -195,7 +199,8 @@ export default function DocumentsBrowser({
             {/* Role-specific actions injected here */}
             {renderActions?.({
               buildingId,
-              currentPath,
+              currentFolderId,
+              crumbs,
               refresh: refreshAll,
               capabilities,
             })}
@@ -204,41 +209,51 @@ export default function DocumentsBrowser({
 
         <CardContent>
           <div className="rounded-md border relative">
-            <div className="grid grid-cols-[24px_1fr] items-center px-3 py-2 text-xs uppercase text-muted-foreground border-b">
+            <div className="grid grid-cols-[24px_1fr_auto] items-center px-3 py-2 text-xs uppercase text-muted-foreground border-b">
               <div />
               <div>Name</div>
+              <div className="text-right"> </div>
             </div>
 
             <ScrollArea className="h-[540px]">
               <div className="divide-y">
+                {/* Folders */}
                 {childFolders?.length > 0 &&
                   childFolders.map((f) => (
                     <div
-                      key={`folder-${f.segment}`}
-                      className="grid grid-cols-[24px_1fr] items-center px-3 py-2 hover:bg-muted/40"
+                      key={f.id}
+                      className="grid grid-cols-[24px_1fr_auto] items-center px-3 py-2 hover:bg-muted/40"
                     >
                       <div className="flex items-center justify-center">
-                        <FolderPlus className="h-4 w-4" />
+                        <Folder className="h-4 w-4" />
                       </div>
+
                       <button
-                        className="text-left hover:text-primary"
-                        onClick={() => openChild(f.segment)}
+                        className="text-left hover:text-primary truncate"
+                        onClick={() => openChildFolder(f)}
                         title={`Open ${f.title}`}
                       >
                         {f.title}
                       </button>
+
+                      {/* Simple badge (optional) */}
+                      <div className="text-right text-xs text-muted-foreground">
+                        {f._restricted ? 'Restricted' : ''}
+                      </div>
                     </div>
                   ))}
 
+                {/* Files */}
                 {docs?.length > 0 &&
                   docs.map((doc) => (
                     <div
                       key={doc.id}
-                      className="grid grid-cols-[24px_1fr] items-center px-3 py-2 hover:bg-muted/40"
+                      className="grid grid-cols-[24px_1fr_auto] items-center px-3 py-2 hover:bg-muted/40"
                     >
                       <div className="flex items-center justify-center">
                         <FileIcon className="h-4 w-4" />
                       </div>
+
                       <a
                         href={doc.url}
                         target="_blank"
@@ -248,6 +263,10 @@ export default function DocumentsBrowser({
                       >
                         {doc.title}
                       </a>
+
+                      <div className="text-right text-xs text-muted-foreground">
+                        {doc._restricted ? 'Restricted' : ''}
+                      </div>
                     </div>
                   ))}
 

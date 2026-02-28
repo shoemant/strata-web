@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import { useParams } from 'next/navigation';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -18,7 +18,9 @@ import {
   ChevronRight,
   ChevronLeft,
   Home,
+  Folder as FolderIcon,
 } from 'lucide-react';
+
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -33,47 +35,41 @@ export default function DocumentsPage() {
   const supabase = useSupabaseClient();
   const session = useSession();
   const fileInputRef = useRef(null);
-  const [visibilityDialog, setVisibilityDialog] = useState({
-    open: false,
-    folder: null,
-  });
+
   const { id: raw } = useParams();
   const buildingId = Array.isArray(raw) ? raw[0] : raw;
-
-  console.log('📌 buildingId from useParams:', buildingId);
-
-  const [currentPath, setCurrentPath] = useState(''); // '' means root
-  const [newFolder, setNewFolder] = useState('');
-  const [childFolders, setChildFolders] = useState([]);
-  const [docs, setDocs] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const [renameDialog, setRenameDialog] = useState({ open: false, doc: null });
-
-  // dropzone UI state
-  const [dragActive, setDragActive] = useState(false);
-  const [uploadCount, setUploadCount] = useState({ done: 0, total: 0 });
 
   const isAuthed = Boolean(session?.user?.id);
   const canUpload = Boolean(buildingId && isAuthed);
 
-  const crumbs = useMemo(
-    () => (currentPath ? currentPath.split('/').filter(Boolean) : []),
-    [currentPath]
-  );
-  const prefix = useMemo(
-    () => (currentPath ? `${currentPath}/` : ''),
-    [currentPath]
-  );
+  // ✅ NEW: navigation by folder id, not string path
+  // crumbs = [{id,title}, ...] -> currentFolderId = last id or null (root)
+  const [crumbs, setCrumbs] = useState([]); // [{id, title}]
+  const currentFolderId = crumbs.length ? crumbs[crumbs.length - 1].id : null;
+
+  const [newFolder, setNewFolder] = useState('');
+  const [childFolders, setChildFolders] = useState([]); // [{id,title,is_folder:true}]
+  const [docs, setDocs] = useState([]); // files
+
+  const [uploading, setUploading] = useState(false);
+  const [uploadCount, setUploadCount] = useState({ done: 0, total: 0 });
+
+  const [dragActive, setDragActive] = useState(false);
+
+  const [renameDialog, setRenameDialog] = useState({ open: false, doc: null });
+
+  const [visibilityDialog, setVisibilityDialog] = useState({
+    open: false,
+    item: null, // folder OR file row
+  });
 
   const [deleteDialog, setDeleteDialog] = useState({
     open: false,
-    target: null,
+    target: null, // file row OR folder row
     isFolder: false,
   });
 
-  // Safer global drag guards (prevent tab navigation only when dropping on body)
+  // Prevent dropping file on body from navigating away
   useEffect(() => {
     const preventIfFileOnBody = (e) => {
       const types = Array.from(e.dataTransfer?.types || []);
@@ -92,15 +88,32 @@ export default function DocumentsPage() {
     };
   }, []);
 
-  // Load immediate subfolders of currentPath
-  useEffect(() => {
+  // ---------- Queries ----------
+  async function refreshFolders() {
     if (!buildingId || !isAuthed) return;
-    refreshFolders();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildingId, isAuthed, supabase, prefix, currentPath]);
 
-  // Load files for currentPath
+    let q = supabase
+      .from('documents')
+      .select('id, title, is_folder, parent_id')
+      .eq('building_id', buildingId)
+      .eq('is_folder', true)
+      .order('title', { ascending: true });
+
+    if (currentFolderId) q = q.eq('parent_id', currentFolderId);
+    else q = q.is('parent_id', null);
+
+    const { data, error } = await q;
+    if (error) {
+      console.error('Error loading folders:', error);
+      setChildFolders([]);
+      return;
+    }
+    setChildFolders(data || []);
+  }
+
   async function refreshFiles() {
+    if (!buildingId || !isAuthed) return;
+
     let q = supabase
       .from('documents')
       .select('*')
@@ -108,12 +121,8 @@ export default function DocumentsPage() {
       .eq('is_folder', false)
       .order('created_at', { ascending: false });
 
-    if (currentPath) {
-      q = q.eq('folder', currentPath);
-    } else {
-      // root must include '' and NULL
-      q = q.or('folder.eq.,folder.is.null');
-    }
+    if (currentFolderId) q = q.eq('parent_id', currentFolderId);
+    else q = q.is('parent_id', null);
 
     const { data, error } = await q;
     if (error) {
@@ -124,241 +133,87 @@ export default function DocumentsPage() {
     setDocs(data || []);
   }
 
-  async function handleRenameFile(doc) {
-    const newTitle = prompt('Enter new file name:', doc.title);
-    if (!newTitle || newTitle === doc.title) return;
-
-    // Just change the title, keep url/path the same
-    const { error } = await supabase
-      .from('documents')
-      .update({ title: newTitle })
-      .eq('id', doc.id);
-
-    if (error) {
-      console.error('DB rename error:', error);
-      alert('Failed to rename file in DB.');
-    } else {
-      await refreshFiles();
-    }
-  }
-
-  async function refreshFolders() {
-    const pref = currentPath ? `${currentPath}/` : '';
-    const likePattern = `${pref}%`;
-
-    const { data, error } = await supabase
-      .from('documents')
-      .select('id, folder, title, is_folder')
-      .eq('building_id', buildingId)
-      .eq('is_folder', true)
-      .like('folder', likePattern);
-
-    if (error) {
-      console.error('Error loading folder list:', error);
-      setChildFolders([]);
-      return;
-    }
-
-    const rows = data || [];
-
-    // Heuristic: if we see ANY folder with folder === currentPath, assume Mode A (parent-path model)
-    const looksLikeParentModel = rows.some(
-      (r) => (r.folder || '') === (currentPath || '')
-    );
-
-    let items = [];
-
-    if (looksLikeParentModel) {
-      // MODE A: parent-path model -> immediate children are rows with folder === currentPath
-      const immediate = rows.filter(
-        (r) => (r.folder || '') === (currentPath || '')
-      );
-      items = immediate
-        .map((r) => ({ id: r.id, segment: r.title, title: r.title }))
-        .sort((a, b) => a.title.localeCompare(b.title));
-    } else {
-      // MODE B: self-path model -> immediate children are rows with folder starting with `${pref}`
-      // where the remainder has no '/'
-      const immediateSegs = new Set();
-      rows.forEach((row) => {
-        const f = row.folder || '';
-        if (!f.startsWith(pref)) return;
-        const remainder = f.slice(pref.length);
-        if (!remainder || remainder.includes('/')) return; // only immediate
-        immediateSegs.add(remainder);
-      });
-
-      const titleBySeg = new Map();
-      immediateSegs.forEach((seg) => {
-        const exact = rows.find((r) => r.folder === `${pref}${seg}`);
-        titleBySeg.set(seg, (exact && exact.title) || seg);
-      });
-
-      items = Array.from(titleBySeg.entries())
-        .map(([segment, title]) => {
-          const exact = rows.find((r) => r.folder === `${pref}${segment}`);
-          return {
-            id: exact ? exact.id : null, // ✅ ensure ID is always present
-            segment,
-            title,
-          };
-        })
-        .sort((a, b) => a.title.localeCompare(b.title));
-    }
-
-    setChildFolders(items);
-  }
-
-  // Change signature to accept (oldName, newName)
-  async function handleRenameFolder(oldName, newName) {
-    if (!newName || newName === oldName) return;
-
-    const isRoot = !currentPath;
-    const oldPath = isRoot ? oldName : `${currentPath}/${oldName}`;
-    const newPath = isRoot ? newName : `${currentPath}/${newName}`;
-
-    // lookup row
-    const { data: foundB } = await supabase
-      .from('documents')
-      .select('id, folder, title')
-      .eq('building_id', buildingId)
-      .eq('is_folder', true)
-      .eq('folder', oldPath)
-      .limit(1);
-
-    let folderRow = (foundB && foundB[0]) || null;
-
-    if (!folderRow) {
-      const { data: foundA } = await supabase
-        .from('documents')
-        .select('id, folder, title')
-        .eq('building_id', buildingId)
-        .eq('is_folder', true)
-        .eq('folder', currentPath || '')
-        .eq('title', oldName)
-        .limit(1);
-
-      folderRow = (foundA && foundA[0]) || null;
-    }
-
-    if (!folderRow) {
-      alert('Could not find folder row to rename.');
-      return;
-    }
-
-    const isModeA = (folderRow.folder || '') === (currentPath || '');
-    const folderUpdate = isModeA
-      ? { title: newName }
-      : { title: newName, folder: newPath };
-
-    await supabase
-      .from('documents')
-      .update(folderUpdate)
-      .eq('id', folderRow.id);
-
-    // update descendants
-    const { data: descendants } = await supabase
-      .from('documents')
-      .select('id, folder')
-      .eq('building_id', buildingId)
-      .like('folder', `${oldPath}/%`);
-
-    for (const row of descendants || []) {
-      const updatedFolder = row.folder.replace(oldPath, newPath);
-      await supabase
-        .from('documents')
-        .update({ folder: updatedFolder })
-        .eq('id', row.id);
-    }
-
-    await Promise.all([refreshFolders(), refreshFiles()]);
-  }
-
   useEffect(() => {
     if (!buildingId || !isAuthed) return;
+    refreshFolders();
     refreshFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildingId, isAuthed, supabase, currentPath]);
+  }, [buildingId, isAuthed, currentFolderId]);
 
-  // Create folder
+  // ---------- Navigation ----------
+  function goHome() {
+    setCrumbs([]);
+  }
+
+  function goUp() {
+    setCrumbs((prev) => prev.slice(0, -1));
+  }
+
+  function goToCrumb(idx) {
+    if (idx < 0) return goHome();
+    setCrumbs((prev) => prev.slice(0, idx + 1));
+  }
+
+  function openChildFolder(folderRow) {
+    setCrumbs((prev) => [
+      ...prev,
+      { id: folderRow.id, title: folderRow.title },
+    ]);
+  }
+
+  // ---------- Create folder ----------
   async function handleCreateFolder(e) {
     e.preventDefault();
-    const segment = newFolder.trim().replaceAll('/', '');
-    if (!segment) return;
+    if (!canUpload) return;
 
-    const newPath = currentPath ? `${currentPath}/${segment}` : segment;
+    const name = newFolder.trim().replaceAll('/', '');
+    if (!name) return;
 
+    // optional: prevent duplicates within same parent (you also have unique indexes)
     const { data: exists, error: existsErr } = await supabase
       .from('documents')
       .select('id')
       .eq('building_id', buildingId)
-      .eq('folder', newPath)
       .eq('is_folder', true)
+      .eq('title', name)
+      .match(currentFolderId ? { parent_id: currentFolderId } : {})
       .limit(1);
 
-    if (existsErr) {
-      console.error('Error checking folder:', existsErr.message);
+    if (existsErr) console.error('Folder exists check error:', existsErr);
+
+    if (exists?.length) {
+      setNewFolder('');
       return;
     }
 
-    if (!exists?.length) {
-      const { data: inserted, error } = await supabase
-        .from('documents')
-        .insert({
-          building_id: buildingId,
-          uploaded_by: session?.user?.id || null,
-          folder: newPath, // <-- this is Mode B (self-path)
-          title: segment, // display name
-          is_folder: true,
-          url: null,
-          path: null,
-        })
-        .select('id')
-        .single();
+    const payload = {
+      building_id: buildingId,
+      uploaded_by: session?.user?.id || null,
+      title: name,
+      is_folder: true,
+      parent_id: currentFolderId, // null = root
+      url: null,
+      path: null,
 
-      if (error) {
-        console.error('Error creating folder:', error.message);
-        return;
-      }
+      // keep folder column harmlessly for now (optional)
+      folder: '',
+    };
 
-      // ✅ use the ID we just inserted
-      setChildFolders((prev) => {
-        const next = [...prev];
-        if (!next.some((f) => f.segment === segment)) {
-          next.push({ id: inserted.id, segment, title: segment });
-        }
-        return next.sort((a, b) => a.title.localeCompare(b.title));
-      });
-      setNewFolder('');
+    const { error } = await supabase.from('documents').insert(payload);
+    if (error) {
+      console.error('Error creating folder:', error);
+      return;
     }
 
-    setChildFolders((prev) => {
-      const segment = newPath.split('/').pop();
-      const title = segment; // display name equals segment by default
-      const next = [...prev];
-
-      // avoid duplicates by segment
-      if (!next.some((f) => f.segment === segment)) {
-        next.push({ segment, title });
-      }
-      return next.sort((a, b) => a.title.localeCompare(b.title));
-    });
     setNewFolder('');
+    await refreshFolders();
   }
 
-  // === Upload helpers (button + dropzone both use these) ===
+  // ---------- Upload ----------
   function makeStorageKey(fileName) {
     const safeName = fileName.replace(/\s+/g, '_');
-    const base = currentPath ? `${buildingId}/${currentPath}` : `${buildingId}`;
-    return `${base}/${Date.now()}_${safeName}`;
-  }
-
-  function getCurrentTimestamp() {
-    const now = new Date();
-
-    const iso = now.toISOString();
-
-    return iso.replace('T', ' ').replace('Z', '+00');
+    // ✅ Make storage path IMMUTABLE (moves/renames won't touch bucket)
+    return `${buildingId}/${Date.now()}_${safeName}`;
   }
 
   async function uploadOne(file) {
@@ -367,6 +222,7 @@ export default function DocumentsPage() {
     const { error: upErr } = await supabase.storage
       .from('documents')
       .upload(storageKey, file);
+
     if (upErr) throw upErr;
 
     const { data: urlData } = supabase.storage
@@ -378,9 +234,10 @@ export default function DocumentsPage() {
       title: file.name,
       url: urlData.publicUrl,
       building_id: buildingId,
-      folder: currentPath,
-      path: storageKey,
       is_folder: false,
+      path: storageKey,
+      parent_id: currentFolderId, // ✅ attaches file to current folder
+      folder: '', // legacy column, ignore
     };
 
     const { error: insErr } = await supabase.from('documents').insert(payload);
@@ -418,14 +275,50 @@ export default function DocumentsPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
-  // Delete file
-  async function handleDelete(doc, skipDialog = false) {
-    // If dialog should be shown, open it
-    if (!skipDialog) {
-      setDeleteDialog({ open: true, target: doc, isFolder: false });
+  // ---------- Rename ----------
+  async function handleRenameFolder(folderId, newName) {
+    const name = (newName || '').trim();
+    if (!name) return;
+
+    const { error } = await supabase
+      .from('documents')
+      .update({ title: name }) // ✅ only title changes in tree model
+      .eq('id', folderId);
+
+    if (error) {
+      console.error('Folder rename error:', error);
+      alert('Failed to rename folder.');
       return;
     }
 
+    // Update breadcrumb title if you renamed an ancestor currently in crumbs
+    setCrumbs((prev) =>
+      prev.map((c) => (c.id === folderId ? { ...c, title: name } : c))
+    );
+
+    await refreshFolders();
+  }
+
+  async function handleRenameFile(fileId, newName) {
+    const name = (newName || '').trim();
+    if (!name) return;
+
+    const { error } = await supabase
+      .from('documents')
+      .update({ title: name })
+      .eq('id', fileId);
+
+    if (error) {
+      console.error('File rename error:', error);
+      alert('Failed to rename file.');
+      return;
+    }
+
+    await refreshFiles();
+  }
+
+  // ---------- Delete (file) ----------
+  async function deleteFile(doc) {
     if (doc.path) {
       const { error: storageErr } = await supabase.storage
         .from('documents')
@@ -448,98 +341,69 @@ export default function DocumentsPage() {
     await refreshFiles();
   }
 
-  // Recursive delete helpers
-  async function fetchRowsUnder(folderPath) {
-    const { data: exact, error: e1 } = await supabase
-      .from('documents')
-      .select('id, path, is_folder, title, folder')
-      .eq('building_id', buildingId)
-      .eq('folder', folderPath);
-    if (e1) throw e1;
+  // ---------- Delete (folder recursive by parent_id) ----------
+  async function fetchDescendantsRecursive(rootFolderId) {
+    // Small-docs friendly BFS in JS (no RPC required)
+    const allRows = [];
+    const queue = [rootFolderId];
 
-    const { data: sub, error: e2 } = await supabase
-      .from('documents')
-      .select('id, path, is_folder, title, folder')
-      .eq('building_id', buildingId)
-      .like('folder', `${folderPath}/%`);
-    if (e2) throw e2;
+    while (queue.length) {
+      const parent = queue.shift();
 
-    return [...(exact || []), ...(sub || [])];
-  }
+      const { data, error } = await supabase
+        .from('documents')
+        .select('id, is_folder, path, title, parent_id')
+        .eq('building_id', buildingId)
+        .eq('parent_id', parent);
 
-  async function deleteFolderRecursive(targetPath) {
-    setDeleting(true);
-    try {
-      const rows = await fetchRowsUnder(targetPath);
-      const filePaths = rows
-        .filter((r) => !r.is_folder && r.path)
-        .map((r) => r.path);
-      if (filePaths.length) {
-        const { error: rmErr } = await supabase.storage
-          .from('documents')
-          .remove(filePaths);
-        if (rmErr) throw rmErr;
+      if (error) throw error;
+
+      for (const row of data || []) {
+        allRows.push(row);
+        if (row.is_folder) queue.push(row.id);
       }
-      const ids = rows.map((r) => r.id);
-      if (ids.length) {
-        const { error: delErr } = await supabase
-          .from('documents')
-          .delete()
-          .in('id', ids);
-        if (delErr) throw delErr;
-      }
-    } finally {
-      setDeleting(false);
     }
 
-    if (targetPath === currentPath) {
-      const parts = currentPath.split('/').filter(Boolean);
-      parts.pop();
-      const parent = parts.join('/');
-      setCurrentPath(parent);
-      setDocs([]);
-    } else {
-      const seg = targetPath.slice(prefix.length).split('/')[0];
-      if (seg)
-        setChildFolders((prev) =>
-          prev.filter((f) =>
-            typeof f === 'string' ? f !== seg : f.segment !== seg
-          )
-        );
+    return allRows;
+  }
+
+  async function deleteFolderRecursive(folderRow) {
+    const folderId = folderRow.id;
+
+    // 1) gather all descendants (children, grandchildren, etc.)
+    const descendants = await fetchDescendantsRecursive(folderId);
+
+    // include the folder itself
+    const all = [...descendants, folderRow];
+
+    // 2) remove files from bucket
+    const filePaths = all
+      .filter((r) => !r.is_folder && r.path)
+      .map((r) => r.path);
+    if (filePaths.length) {
+      const { error: rmErr } = await supabase.storage
+        .from('documents')
+        .remove(filePaths);
+      if (rmErr) throw rmErr;
     }
-  }
 
-  async function handleDeleteChildFolder(name) {
-    const target = currentPath ? `${currentPath}/${name}` : name;
-    setDeleteDialog({ open: true, target, isFolder: true });
-  }
-
-  async function handleDeleteCurrentFolder() {
-    if (!currentPath) return;
-    if (!confirm(`Delete folder “${currentPath}” and EVERYTHING inside it?`))
-      return;
-    try {
-      await deleteFolderRecursive(currentPath);
-    } catch (err) {
-      console.error('Folder delete failed:', err);
-      alert('Failed to delete folder. Check console for details.');
+    // 3) delete db rows (descendants first, then folder)
+    const ids = all.map((r) => r.id);
+    if (ids.length) {
+      const { error: delErr } = await supabase
+        .from('documents')
+        .delete()
+        .in('id', ids);
+      if (delErr) throw delErr;
     }
+
+    // 4) if you deleted the folder you're currently inside, go up
+    if (currentFolderId === folderId) goUp();
+
+    await Promise.all([refreshFolders(), refreshFiles()]);
   }
 
-  function goToCrumb(idx) {
-    if (idx < 0) {
-      setCurrentPath('');
-      return;
-    }
-    const next = crumbs.slice(0, idx + 1).join('/');
-    setCurrentPath(next);
-  }
-
-  function openChild(name) {
-    setCurrentPath(currentPath ? `${currentPath}/${name}` : name);
-  }
-
-  // Dropzone handlers (scoped to list panel)
+  // ---------- Dropzone ----------
   const onDragEnter = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -587,33 +451,29 @@ export default function DocumentsPage() {
                 size="icon"
                 variant="ghost"
                 aria-label="Go up"
-                onClick={() => {
-                  if (!currentPath) return;
-                  const parts = currentPath.split('/').filter(Boolean);
-                  parts.pop();
-                  setCurrentPath(parts.join('/'));
-                }}
+                onClick={goUp}
+                disabled={!crumbs.length}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
 
               <Button
-                variant={currentPath === '' ? 'secondary' : 'ghost'}
+                variant={crumbs.length === 0 ? 'secondary' : 'ghost'}
                 size="sm"
-                onClick={() => setCurrentPath('')}
+                onClick={goHome}
               >
                 <Home className="h-4 w-4 mr-1" /> Home
               </Button>
 
-              {crumbs.map((seg, i) => (
-                <React.Fragment key={`${seg}-${i}`}>
+              {crumbs.map((c, i) => (
+                <React.Fragment key={c.id}>
                   <ChevronRight className="h-4 w-4" />
                   <Button
                     variant={i === crumbs.length - 1 ? 'secondary' : 'ghost'}
                     size="sm"
                     onClick={() => goToCrumb(i)}
                   >
-                    {seg}
+                    {c.title}
                   </Button>
                 </React.Fragment>
               ))}
@@ -623,7 +483,7 @@ export default function DocumentsPage() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <form onSubmit={handleCreateFolder} className="flex gap-2">
                 <Input
-                  placeholder={`New folder in ${currentPath || 'root'}`}
+                  placeholder={`New folder in ${crumbs.length ? crumbs[crumbs.length - 1].title : 'root'}`}
                   value={newFolder}
                   onChange={(e) => setNewFolder(e.target.value)}
                   className="w-56"
@@ -633,6 +493,7 @@ export default function DocumentsPage() {
                   Create
                 </Button>
               </form>
+
               <div className="flex items-center gap-2 flex-wrap">
                 <label
                   className={[
@@ -640,13 +501,10 @@ export default function DocumentsPage() {
                     uploading
                       ? 'bg-secondary text-secondary-foreground'
                       : 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-
-                    // ✨ Highlight during drag
                     dragActive &&
                       'ring-2 ring-primary ring-offset-2 ring-offset-background',
                   ].join(' ')}
                 >
-                  {' '}
                   <UploadCloud className="mr-2 h-4 w-4" />
                   {uploading
                     ? `Uploading ${uploadCount.done}/${uploadCount.total}…`
@@ -665,7 +523,6 @@ export default function DocumentsPage() {
         </CardHeader>
 
         <CardContent>
-          {/* Drop target around the list ONLY (invisible until dragging) */}
           <div
             className="rounded-md border relative"
             onDragEnter={onDragEnter}
@@ -680,71 +537,84 @@ export default function DocumentsPage() {
               <div>Actions</div>
             </div>
 
-            {/* Scrollable content */}
             <ScrollArea className="h-[540px]">
               <div className="divide-y">
-                {/* Child folders */}
+                {/* Folders */}
                 {childFolders?.length > 0 &&
-                  childFolders.map((f) => {
-                    const segment = typeof f === 'string' ? f : f.segment;
-                    const title = typeof f === 'string' ? f : f.title;
-                    return (
-                      <div
-                        key={`folder-${segment}`}
-                        className="grid grid-cols-[24px_1fr_auto] items-center px-3 py-2 hover:bg-muted/40"
-                      >
-                        <div className="flex items-center justify-center">
-                          <FolderPlus className="h-4 w-4" />
-                        </div>
-                        <button
-                          className="text-left hover:text-primary"
-                          onClick={() => openChild(segment)}
-                          title={`Open ${title}`}
-                        >
-                          {title}
-                        </button>
-                        <DropdownMenu modal={false}>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <ChevronRight className="h-4 w-4 rotate-90" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            <DropdownMenuItem
-                              onSelect={() =>
-                                setRenameDialog({
-                                  open: true,
-                                  doc: { id: segment, title },
-                                })
-                              }
-                            >
-                              Rename
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onSelect={() => {
-                                if (!f.id) {
-                                  alert(
-                                    'This folder has no database ID. Please refresh or re-create it.'
-                                  );
-                                  return;
-                                }
-                                setVisibilityDialog({ open: true, folder: f });
-                              }}
-                            >
-                              Visibility
-                            </DropdownMenuItem>
-
-                            <DropdownMenuItem
-                              onSelect={() => handleDeleteChildFolder(segment)}
-                              className="text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" /> Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                  childFolders.map((f) => (
+                    <div
+                      key={f.id}
+                      className="grid grid-cols-[24px_1fr_auto] items-center px-3 py-2 hover:bg-muted/40"
+                    >
+                      <div className="flex items-center justify-center">
+                        <FolderIcon className="h-4 w-4" />
                       </div>
-                    );
-                  })}
+
+                      <button
+                        className="text-left hover:text-primary"
+                        onClick={() => openChildFolder(f)}
+                        title={`Open ${f.title}`}
+                      >
+                        {f.title}
+                      </button>
+
+                      <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <ChevronRight className="h-4 w-4 rotate-90" />
+                          </Button>
+                        </DropdownMenuTrigger>
+
+                        <DropdownMenuContent>
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              setRenameDialog({
+                                open: true,
+                                doc: { ...f, is_folder: true },
+                              })
+                            }
+                          >
+                            <Image
+                              src="/images/icons/rename.png"
+                              alt="Rename"
+                              width={16}
+                              height={16}
+                              className="mr-2"
+                            />
+                            Rename
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              setVisibilityDialog({ open: true, item: f })
+                            }
+                          >
+                            <Image
+                              src="/images/icons/visibility.png"
+                              alt="Rename"
+                              width={16}
+                              height={16}
+                              className="mr-2"
+                            />
+                            Visibility
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onSelect={() =>
+                              setDeleteDialog({
+                                open: true,
+                                target: f,
+                                isFolder: true,
+                              })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  ))}
 
                 {/* Files */}
                 {docs?.length > 0 &&
@@ -756,6 +626,7 @@ export default function DocumentsPage() {
                       <div className="flex items-center justify-center">
                         <FileIcon className="h-4 w-4" />
                       </div>
+
                       <a
                         href={doc.url}
                         target="_blank"
@@ -766,7 +637,6 @@ export default function DocumentsPage() {
                         {doc.title}
                       </a>
 
-                      {/* 3-dot dropdown for files */}
                       <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon">
@@ -790,8 +660,29 @@ export default function DocumentsPage() {
                           </DropdownMenuItem>
 
                           <DropdownMenuItem
-                            onSelect={() => handleDelete(doc)}
+                            onSelect={() =>
+                              setVisibilityDialog({ open: true, item: doc })
+                            }
+                          >
+                            <Image
+                              src="/images/icons/visibility.png"
+                              alt="Rename"
+                              width={16}
+                              height={16}
+                              className="mr-2"
+                            />
+                            Visibility
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
                             className="text-destructive"
+                            onSelect={() =>
+                              setDeleteDialog({
+                                open: true,
+                                target: doc,
+                                isFolder: false,
+                              })
+                            }
                           >
                             <Trash2 className="h-4 w-4 mr-2" /> Delete
                           </DropdownMenuItem>
@@ -800,7 +691,6 @@ export default function DocumentsPage() {
                     </div>
                   ))}
 
-                {/* Empty state */}
                 {!childFolders?.length && !docs?.length && (
                   <div className="px-3 py-10 text-sm text-muted-foreground text-center">
                     This folder is empty. Create a subfolder or upload files.
@@ -809,7 +699,7 @@ export default function DocumentsPage() {
               </div>
             </ScrollArea>
 
-            {/* Invisible overlay that shows ONLY during drag */}
+            {/* drag overlay */}
             <div
               className={[
                 'absolute inset-0 rounded-md transition',
@@ -822,7 +712,8 @@ export default function DocumentsPage() {
               {dragActive && (
                 <div className="absolute inset-0 grid place-items-center">
                   <div className="text-sm text-primary font-medium animate-pulse">
-                    Drop to upload to “{currentPath || 'Home'}”
+                    Drop to upload to “
+                    {crumbs.length ? crumbs[crumbs.length - 1].title : 'Home'}”
                   </div>
                 </div>
               )}
@@ -836,26 +727,21 @@ export default function DocumentsPage() {
         defaultValue={renameDialog.doc?.title}
         onClose={() => setRenameDialog({ open: false, doc: null })}
         onConfirm={async (newTitle) => {
-          if (!newTitle || newTitle === renameDialog.doc?.title) return;
+          const d = renameDialog.doc;
+          if (!d) return;
 
-          const isFile = renameDialog.doc?.id?.length === 36;
-          if (isFile) {
-            await supabase
-              .from('documents')
-              .update({ title: newTitle })
-              .eq('id', renameDialog.doc.id);
-            await refreshFiles();
+          if (d.is_folder) {
+            await handleRenameFolder(d.id, newTitle);
           } else {
-            // pass old + new name
-            await handleRenameFolder(renameDialog.doc.title, newTitle);
+            await handleRenameFile(d.id, newTitle);
           }
         }}
       />
 
       <VisibilityDialog
         open={visibilityDialog.open}
-        folder={visibilityDialog.folder}
-        onClose={() => setVisibilityDialog({ open: false, folder: null })}
+        folder={visibilityDialog.item} // keep prop name "folder" to avoid touching the dialog file
+        onClose={() => setVisibilityDialog({ open: false, item: null })}
         supabase={supabase}
         buildingId={buildingId}
       />
@@ -872,12 +758,18 @@ export default function DocumentsPage() {
           setDeleteDialog({ open: false, target: null, isFolder: false })
         }
         onConfirm={async () => {
-          if (deleteDialog.isFolder) {
-            await deleteFolderRecursive(deleteDialog.target);
-          } else {
-            await handleDelete(deleteDialog.target, true); // modify handleDelete to skip dialog loop
+          try {
+            if (deleteDialog.isFolder) {
+              await deleteFolderRecursive(deleteDialog.target);
+            } else {
+              await deleteFile(deleteDialog.target);
+            }
+          } catch (err) {
+            console.error('Delete failed:', err);
+            alert('Delete failed. Check console for details.');
+          } finally {
+            setDeleteDialog({ open: false, target: null, isFolder: false });
           }
-          setDeleteDialog({ open: false, target: null, isFolder: false });
         }}
       />
     </div>
