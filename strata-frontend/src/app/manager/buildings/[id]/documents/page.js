@@ -703,7 +703,7 @@ export default function DocumentsPage() {
                         >
                           {title}
                         </button>
-                        <DropdownMenu>
+                        <DropdownMenu modal={false}>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
                               <ChevronRight className="h-4 w-4 rotate-90" />
@@ -711,24 +711,17 @@ export default function DocumentsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent>
                             <DropdownMenuItem
-                              onClick={() =>
+                              onSelect={() =>
                                 setRenameDialog({
                                   open: true,
-                                  doc: { id: segment, title }, // mock structure for folders
+                                  doc: { id: segment, title },
                                 })
                               }
                             >
-                              <Image
-                                src="/images/icons/rename.png"
-                                alt="Rename"
-                                width={16}
-                                height={16}
-                                className="mr-2"
-                              />
                               Rename
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => {
+                              onSelect={() => {
                                 if (!f.id) {
                                   alert(
                                     'This folder has no database ID. Please refresh or re-create it.'
@@ -738,18 +731,11 @@ export default function DocumentsPage() {
                                 setVisibilityDialog({ open: true, folder: f });
                               }}
                             >
-                              <Image
-                                src="/images/icons/visibility.png"
-                                alt="Visibility"
-                                width={16}
-                                height={16}
-                                className="mr-2"
-                              />
                               Visibility
                             </DropdownMenuItem>
 
                             <DropdownMenuItem
-                              onClick={() => handleDeleteChildFolder(segment)}
+                              onSelect={() => handleDeleteChildFolder(segment)}
                               className="text-destructive"
                             >
                               <Trash2 className="h-4 w-4 mr-2" /> Delete
@@ -781,7 +767,7 @@ export default function DocumentsPage() {
                       </a>
 
                       {/* 3-dot dropdown for files */}
-                      <DropdownMenu>
+                      <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon">
                             <ChevronRight className="h-4 w-4 rotate-90" />
@@ -789,7 +775,9 @@ export default function DocumentsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
                           <DropdownMenuItem
-                            onClick={() => setRenameDialog({ open: true, doc })}
+                            onSelect={() =>
+                              setRenameDialog({ open: true, doc })
+                            }
                           >
                             <Image
                               src="/images/icons/rename.png"
@@ -802,7 +790,7 @@ export default function DocumentsPage() {
                           </DropdownMenuItem>
 
                           <DropdownMenuItem
-                            onClick={() => handleDelete(doc)}
+                            onSelect={() => handleDelete(doc)}
                             className="text-destructive"
                           >
                             <Trash2 className="h-4 w-4 mr-2" /> Delete

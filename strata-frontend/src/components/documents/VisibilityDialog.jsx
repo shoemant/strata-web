@@ -94,7 +94,7 @@ export function VisibilityDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Set Visibility for {folder?.title}</DialogTitle>
