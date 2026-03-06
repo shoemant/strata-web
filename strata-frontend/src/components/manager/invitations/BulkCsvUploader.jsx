@@ -5,21 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, CheckCircle2, FileDown, UploadCloud } from 'lucide-react';
+import { sendInviteEmail } from '@/app/login/lib/authActions';
 
-/**
- * Manager CSV columns supported (header row required):
- * - email (required)
- * - role  (required) -> manager | owner | tenant
- * - unit_id (optional) -> takes precedence if present
- * - unit_number (optional) -> fallback resolve by building
- * - note (optional)
- *
- * Flow:
- * 1) Parse CSV
- * 2) Resolve unit_id for owner/tenant rows
- * 3) Call RPC create_invites_bulk(p_building_id, p_rows)
- * 4) For ok rows returned (includes token), call send-invite-email
- */
 export default function BulkCsvUploader({
   supabase,
   buildingId,
@@ -128,6 +115,7 @@ export default function BulkCsvUploader({
     }
 
     setUploading(true);
+
     try {
       const text = await file.text();
       const { headers, rows } = parseCsv(text);
@@ -141,7 +129,6 @@ export default function BulkCsvUploader({
         return;
       }
 
-      // Prepare rows for RPC: { email, role, unit_id, note }
       const prepared = [];
       const localErrors = [];
 
@@ -197,7 +184,6 @@ export default function BulkCsvUploader({
         return;
       }
 
-      // Call bulk RPC once
       const { data: bulkRes, error: bulkErr } = await supabase.rpc(
         'create_invites_bulk',
         {
@@ -212,19 +198,16 @@ export default function BulkCsvUploader({
       );
 
       if (bulkErr) {
-        console.error('create_invites_bulk error:', bulkErr);
         const msg = bulkErr.message || 'Bulk invite RPC failed.';
         setStatus({ ok: false, msg });
         onError?.(msg);
         return;
       }
 
-      // Send emails for ok rows that returned a token
       let emailed = 0;
       const rpcErrors = [];
 
       const unitsById = {};
-      // build small cache for unit labels for this building
       const { data: unitRows } = await supabase
         .from('units')
         .select('id,label')
@@ -243,7 +226,6 @@ export default function BulkCsvUploader({
           continue;
         }
 
-        // Email send requires token
         if (!r.token) {
           rpcErrors.push({
             row: originalRowNum ?? idx + 2,
@@ -254,36 +236,27 @@ export default function BulkCsvUploader({
 
         const unitLabel = r.unit_id ? (unitsById[r.unit_id] ?? null) : null;
 
-        const { error: sendErr } = await supabase.functions.invoke(
-          'send-invite-email',
-          {
-            body: {
-              email: r.email_norm || prepared[idx]?.email,
-              role: r.role,
-              building_id: buildingId,
-              building_label: buildingLabel || buildingId,
-              unit_id: r.unit_id,
-              unit_label: unitLabel,
-              token: r.token,
-              expires_at: r.expires_at,
-            },
-          }
-        );
+        try {
+          await sendInviteEmail({
+            email: r.email_norm || prepared[idx]?.email,
+            role: r.role,
+            building_label: buildingLabel || buildingId,
+            unit_label: unitLabel,
+            token: r.token,
+            expires_at: r.expires_at,
+          });
 
-        if (sendErr) {
+          emailed++;
+        } catch (err) {
           rpcErrors.push({
             row: originalRowNum ?? idx + 2,
-            msg: 'Email send failed',
+            msg: err.message || 'Email send failed',
           });
-          continue;
         }
-
-        emailed++;
       }
 
       const processed = rows.length;
       const created = (bulkRes || []).filter((x) => x.ok).length;
-      const skipped = processed - emailed; // practical "skipped" includes local invalid + rpc fail + email fail
 
       const summary = {
         buildingId,
@@ -299,8 +272,7 @@ export default function BulkCsvUploader({
       setStatus({ ok: true, msg: okMsg });
       onSuccess?.(summary, okMsg);
     } catch (err) {
-      console.error(err);
-      const msg = 'Bulk invite failed.';
+      const msg = err.message || 'Bulk invite failed.';
       setStatus({ ok: false, msg });
       onError?.(msg);
     } finally {

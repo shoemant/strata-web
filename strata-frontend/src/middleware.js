@@ -34,6 +34,7 @@ export async function middleware(request) {
   const publicPaths = [
     '/login',
     '/login/password',
+    '/unauthorized/',
 
     // ✅ terms gating flow
     '/accept-terms',

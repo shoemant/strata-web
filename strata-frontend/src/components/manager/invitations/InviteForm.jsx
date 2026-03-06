@@ -13,12 +13,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { AlertCircle, CheckCircle2, Send } from 'lucide-react';
+import { sendInviteEmail } from '@/app/login/lib/authActions';
 
 export default function InviteForm({
   supabase,
   session,
   buildingId: initialBuildingId,
   buildings = [],
+  actorRole = 'manager',
+  unitOptionsOverride = null,
+  lockBuilding = false,
   onSuccess,
   onError,
 }) {
@@ -29,10 +33,17 @@ export default function InviteForm({
   const [status, setStatus] = useState({ ok: null, msg: '' });
 
   const [selectedBuildingId, setSelectedBuildingId] = useState(null);
-  const multiBuilding = (buildings?.length || 0) > 1;
+  const multiBuilding = (buildings?.length || 0) > 1 && !lockBuilding;
 
   const [units, setUnits] = useState([]);
   const [loadingUnits, setLoadingUnits] = useState(false);
+
+  const allowedRoles = useMemo(() => {
+    if (actorRole === 'owner') {
+      return ['tenant', 'owner'];
+    }
+    return ['tenant', 'owner', 'manager'];
+  }, [actorRole]);
 
   useEffect(() => {
     const preferred =
@@ -42,7 +53,7 @@ export default function InviteForm({
       (initialBuildingId ? initialBuildingId : null);
 
     setSelectedBuildingId(preferred || null);
-  }, [multiBuilding, buildings, initialBuildingId]);
+  }, [buildings, initialBuildingId]);
 
   useEffect(() => {
     (async () => {
@@ -51,6 +62,21 @@ export default function InviteForm({
         setInviteUnitId('none');
         return;
       }
+
+      if (unitOptionsOverride) {
+        setUnits(unitOptionsOverride);
+        setInviteUnitId((prev) => {
+          if (
+            prev !== 'none' &&
+            unitOptionsOverride.some((u) => u.id === prev)
+          ) {
+            return prev;
+          }
+          return unitOptionsOverride[0]?.id ?? 'none';
+        });
+        return;
+      }
+
       setLoadingUnits(true);
 
       const { data, error } = await supabase
@@ -71,9 +97,10 @@ export default function InviteForm({
             : prev
         );
       }
+
       setLoadingUnits(false);
     })();
-  }, [selectedBuildingId, supabase]);
+  }, [selectedBuildingId, supabase, unitOptionsOverride]);
 
   const unitRequired = inviteRole === 'tenant' || inviteRole === 'owner';
 
@@ -105,6 +132,13 @@ export default function InviteForm({
       return;
     }
 
+    if (!allowedRoles.includes(inviteRole)) {
+      const msg = 'You are not allowed to send that type of invite.';
+      setStatus({ ok: false, msg });
+      onError?.(msg);
+      return;
+    }
+
     if (unitRequired && (!inviteUnitId || inviteUnitId === 'none')) {
       const msg = 'Select a unit for owners/tenants.';
       setStatus({ ok: false, msg });
@@ -112,9 +146,16 @@ export default function InviteForm({
       return;
     }
 
+    if (actorRole === 'owner' && inviteRole === 'manager') {
+      const msg = 'Owners cannot invite managers.';
+      setStatus({ ok: false, msg });
+      onError?.(msg);
+      return;
+    }
+
     setSendingInvite(true);
+
     try {
-      // 1) Create/rotate invite in DB via RPC
       const { data: created, error: createErr } = await supabase.rpc(
         'create_invite',
         {
@@ -127,7 +168,6 @@ export default function InviteForm({
       );
 
       if (createErr) {
-        console.error('create_invite error:', createErr);
         const msg = createErr.message || 'Failed to create invitation.';
         setStatus({ ok: false, msg });
         onError?.(msg);
@@ -145,42 +185,31 @@ export default function InviteForm({
         return;
       }
 
-      // 2) Send email (Edge Function / backend)
       const unitLabel =
         unitRequired && inviteUnitId !== 'none'
           ? (units.find((u) => u.id === inviteUnitId)?.label ?? null)
           : null;
 
-      const { error: sendErr } = await supabase.functions.invoke(
-        'send-invite-email',
-        {
-          body: {
-            email,
-            role: inviteRole,
-            building_id: selectedBuildingId,
-            building_label: selectedBuildingObj
-              ? buildingLabel(selectedBuildingObj)
-              : selectedBuildingId,
-            unit_id: unitRequired ? inviteUnitId : null,
-            unit_label: unitLabel,
-            token,
-            expires_at: expiresAt,
-          },
-        }
-      );
+      await sendInviteEmail({
+        email,
+        role: inviteRole,
+        building_label: selectedBuildingObj
+          ? buildingLabel(selectedBuildingObj)
+          : selectedBuildingId,
+        unit_label: unitLabel,
+        token,
+        expires_at: expiresAt,
+      });
 
-      if (sendErr) {
-        console.warn(
-          'send-invite-email failed (invite created anyway):',
-          sendErr
-        );
-      }
-
-      const msg = 'Invitation created.';
+      const msg = 'Invitation created and email sent.';
       setStatus({ ok: true, msg });
       setInviteEmail('');
-      setInviteUnitId('none');
+      setInviteUnitId(unitOptionsOverride?.[0]?.id ?? 'none');
       onSuccess?.(msg);
+    } catch (err) {
+      const msg = err.message || 'Failed to create and send invite.';
+      setStatus({ ok: false, msg });
+      onError?.(msg);
     } finally {
       setSendingInvite(false);
     }
@@ -237,9 +266,11 @@ export default function InviteForm({
               <SelectValue placeholder="Select role" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="tenant">Tenant</SelectItem>
-              <SelectItem value="owner">Owner</SelectItem>
-              <SelectItem value="manager">Manager</SelectItem>
+              {allowedRoles.map((role) => (
+                <SelectItem key={role} value={role}>
+                  {role.charAt(0).toUpperCase() + role.slice(1)}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -269,7 +300,9 @@ export default function InviteForm({
               />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">— No unit —</SelectItem>
+              {inviteRole !== 'manager' ? null : (
+                <SelectItem value="none">— No unit —</SelectItem>
+              )}
               {units.map((u) => (
                 <SelectItem key={u.id} value={u.id}>
                   {u.label}
@@ -315,6 +348,15 @@ InviteForm.propTypes = {
       address: PropTypes.string,
     })
   ),
+  actorRole: PropTypes.oneOf(['manager', 'owner']),
+  unitOptionsOverride: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      label: PropTypes.string,
+      floor: PropTypes.number,
+    })
+  ),
+  lockBuilding: PropTypes.bool,
   onSuccess: PropTypes.func,
   onError: PropTypes.func,
 };

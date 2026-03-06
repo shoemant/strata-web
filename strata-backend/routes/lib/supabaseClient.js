@@ -18,14 +18,11 @@
 const dotenv = require('dotenv');
 const { createClient } = require('@supabase/supabase-js');
 
-// Load environment variables from .env file
 dotenv.config();
 
-// Initialize Supabase client with service role key (backend only)
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Export the client for use in backend modules
 module.exports = { supabase };

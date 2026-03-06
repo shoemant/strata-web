@@ -29,7 +29,6 @@ export default function ManagerInviteHubPage() {
   const [loadingLists, setLoadingLists] = useState(true);
   const [pageStatus, setPageStatus] = useState({ ok: null, msg: '' });
 
-  // Resolve buildings managed by current user
   useEffect(() => {
     if (!session?.user?.id) return;
 
@@ -92,8 +91,6 @@ export default function ManagerInviteHubPage() {
       .in('status', ['pending', 'expired'])
       .order('sent_at', { ascending: false });
 
-    // Recent owner/tenant memberships for this building (via units join)
-    // (RLS must allow manager to read these)
     const unitMembersQ = supabase
       .from('unit_memberships')
       .select(
@@ -106,7 +103,6 @@ export default function ManagerInviteHubPage() {
       .order('created_at', { ascending: false })
       .limit(25);
 
-    // Recent managers for this building
     const managersQ = supabase
       .from('manager_buildings')
       .select(
@@ -163,7 +159,6 @@ export default function ManagerInviteHubPage() {
     setLoadingLists(false);
   }
 
-  // Load units + pending invites + recent members whenever building changes
   useEffect(() => {
     if (!buildingId) return;
     let cancel = false;
@@ -188,7 +183,6 @@ export default function ManagerInviteHubPage() {
     return found?.name || found?.address || bid;
   }
 
-  // Resend = rotate token by recreating invite + email it
   async function handleResend(inviteRow) {
     setPageStatus({ ok: null, msg: '' });
     try {
@@ -301,7 +295,6 @@ export default function ManagerInviteHubPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Single Invite */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -314,6 +307,7 @@ export default function ManagerInviteHubPage() {
                   session={session}
                   buildingId={buildingId}
                   buildings={managerBuildings}
+                  actorRole="manager"
                   onSuccess={async () => {
                     await refreshLists();
                   }}
@@ -324,7 +318,6 @@ export default function ManagerInviteHubPage() {
               </CardContent>
             </Card>
 
-            {/* CSV Upload */}
             <Card>
               <CardHeader className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
@@ -350,18 +343,14 @@ export default function ManagerInviteHubPage() {
             </Card>
           </div>
 
-          {/* Pending Invites */}
           <Card>
             <CardHeader>
               <CardTitle>Pending invites</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
-                {/* Horizontal scroll container */}
                 <div className="w-full overflow-x-auto">
-                  {/* Force a min width so columns don’t crush/overlap */}
                   <div className="min-w-[980px]">
-                    {/* Header */}
                     <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs uppercase text-muted-foreground border-b">
                       <div className="col-span-3">Email</div>
                       <div className="col-span-2">Role</div>
@@ -371,7 +360,6 @@ export default function ManagerInviteHubPage() {
                       <div className="col-span-1 text-right">Actions</div>
                     </div>
 
-                    {/* Vertical scroll */}
                     <ScrollArea className="h-[320px]">
                       {loadingLists ? (
                         <div className="px-3 py-6 text-sm text-muted-foreground">
@@ -430,7 +418,7 @@ export default function ManagerInviteHubPage() {
                                     onClick={() => handleResend(i)}
                                     title="Resend email (rotates token)"
                                   >
-                                    <RotateCcw className="h-4 w-4 mr-1" />{' '}
+                                    <RotateCcw className="h-4 w-4 mr-1" />
                                     Resend
                                   </Button>
 
@@ -445,7 +433,8 @@ export default function ManagerInviteHubPage() {
                                         : 'Cancel invite'
                                     }
                                   >
-                                    <XCircle className="h-4 w-4 mr-1" /> Cancel
+                                    <XCircle className="h-4 w-4 mr-1" />
+                                    Cancel
                                   </Button>
                                 </div>
                               </div>
@@ -464,14 +453,12 @@ export default function ManagerInviteHubPage() {
             </CardContent>
           </Card>
 
-          {/* Recent Members */}
           <Card>
             <CardHeader>
               <CardTitle>Recent members</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
-                {/* Horizontal scroll container */}
                 <div className="w-full overflow-x-auto">
                   <div className="min-w-[920px]">
                     <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs uppercase text-muted-foreground border-b">

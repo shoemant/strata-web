@@ -3,7 +3,6 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 
 const authRoutes = require('./routes/auth.js');
-const inviteRoutes = require('./routes/invite.js');
 const resourceTypeRoutes = require('./routes/resourceTypes.js');
 const checkUser = require('./routes/checkUser.js');
 const resources = require('./routes/resources.js');
@@ -21,10 +20,8 @@ app.use(
 
 app.use(express.json());
 
-
 // Route groups
 app.use('/api', authRoutes);
-app.use('/api/invite', inviteRoutes);
 app.use('/api/resource-types', resourceTypeRoutes);
 app.use('/api/check-user', checkUser);
 app.use('/api/resources', resources);

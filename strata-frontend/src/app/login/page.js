@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import AuthLayout from '@/components/AuthLayout';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { Spinner } from '@/components/ui/spinner';
 import { supabase } from '@/utils/supabase/client';
 import EmailStep from './steps/EmailStep';
@@ -11,43 +11,44 @@ import PasswordStep from './steps/PasswordStep';
 import SignupStep from './steps/SignupStep';
 import ForgotStep from './steps/ForgotStep';
 import ResetStep from './steps/ResetStep';
+import VerifyCodeStep from './steps/VerifyCodeStep';
+import InviteChoiceStep from './steps/InviteChoiceStep';
 import ProgressIndicator from './_components/ProgressIndicator';
-
 import { TERMS_VERSION } from '@/lib/terms';
 
 import {
-  checkEmailForAccount,
-  getPendingInviteRole,
+  checkUserStatus,
   signInWithPassword,
-  signUpUser,
-  resendSignupEmail,
   sendPasswordReset,
   getProfileWithBuilding,
   landingPath,
+  requestSignupCode,
+  registerVerifiedUser,
 } from './lib/authActions';
 
 export default function LoginFlowPage() {
   const router = useRouter();
-  const searchParams = new URLSearchParams(
-    typeof window !== 'undefined' ? window.location.search : ''
-  );
+  const searchParams = useSearchParams();
   const isResetFlow = searchParams.get('reset') === 'true';
 
   const [step, setStep] = useState('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
   const [invite, setInvite] = useState('');
+  const [availableInvites, setAvailableInvites] = useState([]);
+  const [selectedInviteId, setSelectedInviteId] = useState('');
   const [resetSent, setResetSent] = useState(false);
   const [direction, setDirection] = useState(1);
   const [rememberMe, setRememberMe] = useState(false);
   const [loadingLogin, setLoadingLogin] = useState(false);
   const [loadingEmail, setLoadingEmail] = useState(false);
+  const [signupSending, setSignupSending] = useState(false);
 
-  // Sign-up UX guards / messaging
-  const [signupSending, setSignupSending] = useState(false); // prevent double submit
-  const [signupSent, setSignupSent] = useState(false); // show big panel once sent
-  const [signupMsg, setSignupMsg] = useState(''); // screen-reader friendly message
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verifyingCode, setVerifyingCode] = useState(false);
+
   const [resendBusy, setResendBusy] = useState(false);
   const [resendMsg, setResendMsg] = useState({ ok: null, msg: '' });
 
@@ -55,11 +56,10 @@ export default function LoginFlowPage() {
 
   useEffect(() => {
     const { data: listener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (event) => {
         if (event === 'PASSWORD_RECOVERY') {
           setStep('reset');
           setCheckingSession(false);
-          return;
         }
       }
     );
@@ -68,20 +68,17 @@ export default function LoginFlowPage() {
       const { data } = await supabase.auth.getUser();
       const user = data?.user;
 
-      // If we got here via reset password link, do NOT redirect
       if (isResetFlow) {
         setStep('reset');
         setCheckingSession(false);
         return;
       }
 
-      // Not logged in → show login UI
       if (!user) {
         setCheckingSession(false);
         return;
       }
 
-      // Logged in AND NOT in reset mode → redirect to dashboard
       const { profile, buildingId } = await getProfileWithBuilding(user.id);
       const target = landingPath(profile?.role, buildingId);
 
@@ -99,41 +96,89 @@ export default function LoginFlowPage() {
     return () => listener.subscription.unsubscribe();
   }, [router, isResetFlow]);
 
-  const steps = ['email', 'password', 'signup', 'forgot'];
+  const steps = [
+    'email',
+    'password',
+    'invite-choice',
+    'signup',
+    'verify',
+    'forgot',
+    'reset',
+  ];
+
   const goToStep = (newStep) => {
     const curr = steps.indexOf(step);
     const next = steps.indexOf(newStep);
     setDirection(next > curr ? 1 : -1);
     setStep(newStep);
     setError('');
-    if (newStep !== 'signup') {
-      setSignupSent(false);
-      setSignupMsg('');
-      setSignupSending(false);
+
+    if (newStep !== 'verify') {
       setResendMsg({ ok: null, msg: '' });
+      setResendBusy(false);
     }
   };
 
-  // --- Handlers ---
   const handleEmailSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoadingEmail(true);
 
     try {
-      const { exists, email: trimmed } = await checkEmailForAccount(email);
+      const result = await checkUserStatus(email);
+      const trimmed = email.trim().toLowerCase();
+
       setEmail(trimmed);
+      setInvite('');
+      setAvailableInvites([]);
+      setSelectedInviteId('');
+      setVerificationCode('');
 
-      if (exists) return goToStep('password');
+      if (result.exists) {
+        goToStep('password');
+        return;
+      }
 
-      const role = await getPendingInviteRole(trimmed);
-      setInvite(role);
-      goToStep('signup');
-    } catch {
-      setError('Something went wrong.');
+      const invites = result.invites || [];
+
+      if (!invites.length) {
+        setError(
+          'No account was found for that email, and no active invitation exists.'
+        );
+        return;
+      }
+
+      if (invites.length === 1) {
+        setAvailableInvites(invites);
+        setSelectedInviteId(invites[0].id);
+        setInvite(invites[0].role);
+        goToStep('signup');
+        return;
+      }
+
+      setAvailableInvites(invites);
+      goToStep('invite-choice');
+    } catch (err) {
+      setError(err.message || 'Something went wrong.');
     } finally {
       setLoadingEmail(false);
     }
+  };
+
+  const handleInviteChoiceContinue = (e) => {
+    e.preventDefault();
+
+    const selected = availableInvites.find(
+      (inv) => inv.id === selectedInviteId
+    );
+
+    if (!selected) {
+      setError('Please choose an invitation to continue.');
+      return;
+    }
+
+    setInvite(selected.role);
+    goToStep('signup');
   };
 
   const handlePasswordSubmit = async (e) => {
@@ -148,19 +193,22 @@ export default function LoginFlowPage() {
         rememberMe,
         TERMS_VERSION
       );
+
       if (!userId) return;
 
       const { profile, buildingId } = await getProfileWithBuilding(userId);
       const target = landingPath(profile?.role, buildingId);
 
-      if (!profile?.full_name)
-        return router.push(
+      if (!profile?.full_name) {
+        router.push(
           `/onboarding/profile?returnTo=${encodeURIComponent(target)}`
         );
+        return;
+      }
 
       router.push(target);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to log in.');
     } finally {
       setLoadingLogin(false);
     }
@@ -170,25 +218,129 @@ export default function LoginFlowPage() {
     e.preventDefault();
     setError('');
 
+    const selected = availableInvites.find(
+      (inv) => inv.id === selectedInviteId
+    );
+
+    if (!selected) {
+      setError('No invitation is selected.');
+      return;
+    }
+
+    if (!password) {
+      setError('Please enter a password.');
+      return;
+    }
+
+    if (!fullName.trim()) {
+      setError('Please enter your full name.');
+      return;
+    }
+
     try {
       setSignupSending(true);
-      await signUpUser(email, password, TERMS_VERSION);
-      setSignupSent(true);
-      setSignupMsg(`Confirmation email is on its way to ${email}.`);
+
+      await requestSignupCode({
+        email,
+        password,
+        full_name: fullName.trim(),
+        role: selected.role,
+        invite_token: null,
+        invite_id: selected.id,
+      });
+
+      setVerificationCode('');
+      setResendMsg({ ok: null, msg: '' });
+      goToStep('verify');
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to send verification code.');
     } finally {
       setSignupSending(false);
     }
   };
 
+  const handleVerifyCodeSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setVerifyingCode(true);
+
+    try {
+      const selected = availableInvites.find(
+        (inv) => inv.id === selectedInviteId
+      );
+
+      if (!selected) {
+        throw new Error('No invitation is selected.');
+      }
+
+      await registerVerifiedUser({
+        email,
+        password,
+        full_name: fullName.trim(),
+        role: selected.role,
+        code: verificationCode,
+        invite_token: null,
+        invite_id: selected.id,
+      });
+
+      const userId = await signInWithPassword(
+        email,
+        password,
+        rememberMe,
+        TERMS_VERSION
+      );
+
+      if (!userId) {
+        setError('Account created, but login failed.');
+        return;
+      }
+
+      const { profile, buildingId } = await getProfileWithBuilding(userId);
+      const target = landingPath(profile?.role, buildingId);
+
+      if (!profile?.full_name) {
+        router.push(
+          `/onboarding/profile?returnTo=${encodeURIComponent(target)}`
+        );
+        return;
+      }
+
+      router.push(target);
+    } catch (err) {
+      setError(err.message || 'Failed to verify code.');
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
+
   const resendConfirmation = async () => {
     setResendBusy(true);
+    setResendMsg({ ok: null, msg: '' });
+
     try {
-      await resendSignupEmail(email);
-      setResendMsg({ ok: true, msg: 'Confirmation email sent.' });
+      const selected = availableInvites.find(
+        (inv) => inv.id === selectedInviteId
+      );
+
+      if (!selected) {
+        throw new Error('No invitation is selected.');
+      }
+
+      await requestSignupCode({
+        email,
+        password,
+        full_name: fullName.trim(),
+        role: selected.role,
+        invite_token: null,
+        invite_id: selected.id,
+      });
+
+      setResendMsg({ ok: true, msg: 'Verification code sent.' });
     } catch (err) {
-      setResendMsg({ ok: false, msg: err.message });
+      setResendMsg({
+        ok: false,
+        msg: err.message || 'Failed to resend verification code.',
+      });
     } finally {
       setResendBusy(false);
     }
@@ -197,11 +349,12 @@ export default function LoginFlowPage() {
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     setError('');
+
     try {
       await sendPasswordReset(email);
       setResetSent(true);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to send password reset email.');
     }
   };
 
@@ -219,12 +372,10 @@ export default function LoginFlowPage() {
   return (
     <AuthLayout>
       <div className="w-full max-w-md p-6 sm:p-8 overflow-y-auto max-h-[90vh] rounded-2xl shadow-lg bg-card text-foreground bg-gradient-to-br from-blue-50 to-white dark:from-neutral-900 dark:to-neutral-950 dark:bg-none">
-        {/* Optional global dim overlay while checking */}
         {loadingEmail && (
           <div className="absolute inset-0 bg-background/50 dark:bg-black/40 backdrop-blur-[1px] pointer-events-none" />
         )}
 
-        {/* Logo */}
         <div className="w-full flex justify-center mb-4">
           <img
             src="/images/logo.png"
@@ -248,14 +399,11 @@ export default function LoginFlowPage() {
           </div>
         )}
 
-        {/* polite SR live region */}
         <p className="sr-only" aria-live="polite">
           {loadingEmail ? 'Checking your email…' : ''}
-          {signupMsg}
         </p>
 
         <AnimatePresence mode="wait" initial={false} custom={direction}>
-          {/* EMAIL STEP */}
           {step === 'email' && (
             <EmailStep
               direction={direction}
@@ -267,7 +415,6 @@ export default function LoginFlowPage() {
             />
           )}
 
-          {/* PASSWORD STEP */}
           {step === 'password' && (
             <PasswordStep
               direction={direction}
@@ -283,28 +430,52 @@ export default function LoginFlowPage() {
             />
           )}
 
-          {/* SIGNUP STEP */}
+          {step === 'invite-choice' && (
+            <InviteChoiceStep
+              direction={direction}
+              email={email}
+              invites={availableInvites}
+              selectedInviteId={selectedInviteId}
+              setSelectedInviteId={setSelectedInviteId}
+              error={error}
+              goToStep={goToStep}
+              handleInviteChoiceContinue={handleInviteChoiceContinue}
+            />
+          )}
+
           {step === 'signup' && (
             <SignupStep
               direction={direction}
               email={email}
               password={password}
               setPassword={setPassword}
+              fullName={fullName}
+              setFullName={setFullName}
               invite={invite}
               signupSending={signupSending}
-              signupSent={signupSent}
-              signupMsg={signupMsg}
-              resendBusy={resendBusy}
-              resendMsg={resendMsg}
               error={error}
               goToStep={goToStep}
               handleSignupSubmit={handleSignupSubmit}
-              resendConfirmation={resendConfirmation}
               termsVersion={TERMS_VERSION}
             />
           )}
 
-          {/* FORGOT STEP */}
+          {step === 'verify' && (
+            <VerifyCodeStep
+              direction={direction}
+              email={email}
+              code={verificationCode}
+              setCode={setVerificationCode}
+              verifyingCode={verifyingCode}
+              error={error}
+              goToStep={goToStep}
+              handleVerifyCodeSubmit={handleVerifyCodeSubmit}
+              resendConfirmation={resendConfirmation}
+              resendBusy={resendBusy}
+              resendMsg={resendMsg}
+            />
+          )}
+
           {step === 'forgot' && (
             <ForgotStep
               direction={direction}
