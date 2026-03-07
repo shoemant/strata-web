@@ -155,6 +155,7 @@ function BuildingSlide({ active }) {
 function AnnouncementSlide({ active, href }) {
   const hasImg = Boolean(active?.image_url);
   const hasDate = Boolean(active?.event_date);
+
   const formattedDate = hasDate
     ? new Date(active.event_date).toLocaleDateString(undefined, {
         weekday: 'long',
@@ -163,22 +164,16 @@ function AnnouncementSlide({ active, href }) {
       })
     : null;
 
-  // Mobile: no max-h cap so full image shows; md+ keeps the original caps
-  const imgMaxH = hasDate
-    ? 'md:max-h-[80vh] lg:max-h-[82vh]'
-    : 'md:max-h-[72vh] lg:max-h-[75vh]';
-
   return (
-    <div className="block relative">
-      <div className="relative">
+    <div className="block relative bg-black">
+      {/* ── MOBILE: overlay ── */}
+      <div className="relative md:hidden">
         {hasImg ? (
           <img
             src={active.image_url}
             alt={active.title || 'Announcement'}
-            className={[
-              'block w-full h-auto object-contain select-none',
-              imgMaxH,
-            ].join(' ')}
+            className="block w-full object-cover select-none"
+            style={{ aspectRatio: '4/3' }}
             loading="lazy"
             decoding="async"
             draggable={false}
@@ -186,7 +181,59 @@ function AnnouncementSlide({ active, href }) {
           />
         ) : (
           <div
-            className="block w-full h-[40vh] sm:h-[44vh] md:h-[48vh] lg:h-[52vh]"
+            className="w-full"
+            style={{
+              aspectRatio: '4/3',
+              background:
+                active?.banner_bg_color ||
+                'linear-gradient(to bottom right, #4f46e5, #6366f1)',
+            }}
+          />
+        )}
+
+        {/* Gradient overlay — tall enough to always show full text */}
+        <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-4 pb-10 pt-24 pointer-events-none flex flex-col justify-end">
+          <p
+            className="text-white font-bold text-lg leading-snug break-words"
+            style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+          >
+            {active.title}
+          </p>
+          {active.message && (
+            <p
+              className="text-white/90 text-sm leading-relaxed break-words whitespace-pre-wrap mt-1.5"
+              style={{ textShadow: '0 1px 1px rgba(0,0,0,0.6)' }}
+            >
+              {active.message}
+            </p>
+          )}
+          {hasDate && (
+            <span
+              className="inline-flex self-start items-center px-3 py-1 mt-2
+          rounded-md bg-primary text-primary-foreground font-medium shadow-lg text-xs"
+              style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.35)' }}
+            >
+              {formattedDate}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ── DESKTOP: classic overlay ── */}
+      <div className="hidden md:block relative">
+        {hasImg ? (
+          <img
+            src={active.image_url}
+            alt={active.title || 'Announcement'}
+            className="block w-full h-auto object-contain select-none max-h-[80vh] lg:max-h-[82vh]"
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+            onDragStart={(e) => e.preventDefault()}
+          />
+        ) : (
+          <div
+            className="block w-full md:h-[48vh] lg:h-[52vh]"
             style={{
               background:
                 active?.banner_bg_color ||
@@ -195,29 +242,17 @@ function AnnouncementSlide({ active, href }) {
           />
         )}
 
-        {/* Text stack - pinned to bottom. Uses absolute on the img wrapper,
-            but we also need a gradient scrim so text is always readable */}
-        <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/60 via-black/20 to-transparent pt-16 pb-[5vh] px-4 sm:px-6 md:px-8 pointer-events-none flex flex-col justify-end">
-          <div className="space-y-2 text-white max-w-[90%] sm:max-w-[75%] md:max-w-[60%]">
+        <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/75 via-black/35 to-transparent pt-20 pb-[5vh] px-8 pointer-events-none flex flex-col justify-end">
+          <div className="space-y-2 text-white max-w-[60%]">
             <div
-              className="
-                font-bold leading-tight line-clamp-2
-                text-[clamp(1rem,5.2vw,2rem)]
-                sm:text-[clamp(1.2rem,3.6vw,2.4rem)]
-                md:text-[clamp(1.4rem,3vw,2.8rem)]
-              "
+              className="font-bold leading-tight break-words text-[clamp(1.4rem,3vw,2.8rem)]"
               style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}
             >
               {active.title}
             </div>
             {active.message && (
               <div
-                className="
-           mt-2 leading-snug break-words line-clamp-3
-           text-[clamp(0.9rem,3.2vw,1.1rem)]
-          sm:text-[clamp(1rem,2.4vw,1.2rem)]
-          md:text-[clamp(1.05rem,2vw,1.25rem)]
-        "
+                className="mt-2 leading-snug break-words whitespace-pre-wrap text-[clamp(1.05rem,2vw,1.25rem)]"
                 style={{ textShadow: '0 1px 1px rgba(0,0,0,0.5)' }}
               >
                 {active.message}
@@ -225,11 +260,9 @@ function AnnouncementSlide({ active, href }) {
             )}
             {hasDate && (
               <div
-                className="
-            inline-flex items-center px-3 sm:px-4 py-1.5 mt-3
-            rounded-md bg-primary text-primary-foreground font-medium shadow-lg
-            text-[clamp(0.75rem,2vw,1rem)]
-                "
+                className="inline-flex items-center px-4 py-1.5 mt-3
+                  rounded-md bg-primary text-primary-foreground font-medium shadow-lg
+                  text-[clamp(0.75rem,2vw,1rem)]"
                 style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.35)' }}
               >
                 {formattedDate}

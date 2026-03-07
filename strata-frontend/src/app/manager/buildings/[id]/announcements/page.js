@@ -1,4 +1,3 @@
-// src/app/manager/buildings/[id]/announcements/page.jsx
 'use client';
 
 import { useEffect, useMemo, useState, useRef } from 'react';
@@ -28,104 +27,68 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Loader2,
-  RefreshCw,
   Trash2,
   Image as ImageIcon,
   X,
+  Pencil,
+  CalendarClock,
 } from 'lucide-react';
 
-// Small helper — make a random id for filename
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+function toDateInputValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function toDateTimeLocalValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+}
 
 export default function AnnouncementsPage() {
   const params = useParams();
   const buildingId = params?.id;
   const supabase = useSupabaseClient();
 
-  const [banner, setBanner] = useState(null); // { type: 'success' | 'error', msg: string } | null
+  const [banner, setBanner] = useState(null);
   const bannerTimerRef = useRef(null);
 
   const [announcements, setAnnouncements] = useState([]);
 
   const [presets, setPresets] = useState([]);
   const [selectedPresetId, setSelectedPresetId] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false); // optional admin controls
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      // admin check (optional)
-      const { data: u } = await supabase.auth.getUser();
-      const uid = u?.user?.id;
-      if (uid) {
-        const { data: prof } = await supabase
-          .from('user_profiles')
-          .select('is_admin')
-          .eq('id', uid)
-          .maybeSingle();
-        setIsAdmin(Boolean(prof?.is_admin));
-      }
-
-      // fetch presets (active only)
-      const { data: pr } = await supabase
-        .from('announcement_presets')
-        .select('*')
-        .eq('is_active', true)
-        .order('title', { ascending: true });
-      setPresets(pr || []);
-    })();
-  }, [supabase]);
-
-  function presetImagePublicUrl(preset) {
-    if (!preset?.image_path) return '';
-    const { data } = supabase.storage
-      .from('announcement-presets')
-      .getPublicUrl(preset.image_path);
-
-    // cache-buster
-    return data?.publicUrl ? `${data.publicUrl}?v=${Date.now()}` : '';
-  }
-
-  function applyPreset(preset) {
-    if (!preset) return;
-    setForm((f) => ({
-      ...f,
-      title: preset.title || '',
-      subtitle: preset.subtitle || '',
-      message: preset.message || '',
-      target_audience: preset.target_audience || 'all',
-      // style
-      text_color: preset.text_color || f.text_color,
-      banner_bg_color: preset.banner_bg_color || f.banner_bg_color,
-      overlay_color: preset.overlay_color ?? f.overlay_color,
-      overlay_opacity:
-        typeof preset.overlay_opacity === 'number'
-          ? preset.overlay_opacity
-          : f.overlay_opacity,
-      // image
-      use_image: true,
-      image_file: null,
-      image_url: presetImagePublicUrl(preset),
-      // DO NOT change event_date/expiry fields—user fills these
-    }));
-  }
+  const [editingId, setEditingId] = useState(null);
 
   const [form, setForm] = useState({
     title: '',
-    subtitle: '',
     message: '',
     target_audience: 'all',
-    event_date: '', // yyyy-mm-dd (optional)
-    expiry_mode: 'none', // none | next_day | duration | exact
-    expiry_days: '14', // used if mode == duration
-    expires_at: '', // yyyy-mm-dd (optional, if mode == exact)
-    // style / media (not required to store in DB unless you want to)
+    event_date: '',
+    expiry_mode: 'none',
+    expiry_days: '14',
+    expires_at: '',
+    publish_mode: 'now', // now | later
+    publish_at: '',
     use_image: true,
-    image_file: null, // File
-    image_url: '', // resolved URL after upload
+    image_file: null,
+    image_url: '',
     text_color: '#ffffff',
-    banner_bg_color: '#1d4ed8', // Tailwind's blue-700-ish default
+    banner_bg_color: '#1d4ed8',
     overlay_color: '#000000',
-    overlay_opacity: 45, // 0..100 (%)
+    overlay_opacity: 45,
   });
 
   const [loading, setLoading] = useState(true);
@@ -135,12 +98,64 @@ export default function AnnouncementsPage() {
   const imageInputRef = useRef(null);
 
   useEffect(() => {
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      const userId = u?.user?.id;
+
+      if (userId) {
+        const { data: prof } = await supabase
+          .from('user_profiles')
+          .select('is_admin')
+          .eq('id', userId)
+          .maybeSingle();
+
+        setIsAdmin(Boolean(prof?.is_admin));
+      }
+
+      const { data: pr } = await supabase
+        .from('announcement_presets')
+        .select('*')
+        .eq('is_active', true)
+        .order('title', { ascending: true });
+
+      setPresets(pr || []);
+    })();
+  }, [supabase]);
+
+  useEffect(() => {
     if (buildingId) fetchAnnouncements();
   }, [buildingId]);
 
   const nowIso = useMemo(() => new Date().toISOString(), []);
 
-  const fetchAnnouncements = async () => {
+  function resetForm() {
+    if (imageInputRef.current) imageInputRef.current.value = '';
+
+    setEditingId(null);
+    setSelectedPresetId(null);
+
+    setForm({
+      title: '',
+      subtitle: '',
+      message: '',
+      target_audience: 'all',
+      event_date: '',
+      expiry_mode: 'none',
+      expiry_days: '14',
+      expires_at: '',
+      publish_mode: 'now',
+      publish_at: '',
+      use_image: true,
+      image_file: null,
+      image_url: '',
+      text_color: '#ffffff',
+      banner_bg_color: '#1d4ed8',
+      overlay_color: '#000000',
+      overlay_opacity: 45,
+    });
+  }
+
+  async function fetchAnnouncements() {
     setLoading(true);
 
     const { data, error } = await supabase
@@ -148,6 +163,7 @@ export default function AnnouncementsPage() {
       .select('*')
       .eq('building_id', buildingId)
       .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+      .order('publish_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -156,8 +172,40 @@ export default function AnnouncementsPage() {
     } else {
       setAnnouncements(data || []);
     }
+
     setLoading(false);
-  };
+  }
+
+  function presetImagePublicUrl(preset) {
+    if (!preset?.image_path) return '';
+    const { data } = supabase.storage
+      .from('announcement-presets')
+      .getPublicUrl(preset.image_path);
+
+    return data?.publicUrl ? `${data.publicUrl}?v=${Date.now()}` : '';
+  }
+
+  function applyPreset(preset) {
+    if (!preset) return;
+
+    setForm((f) => ({
+      ...f,
+      title: preset.title || '',
+      subtitle: preset.subtitle || '',
+      message: preset.message || '',
+      target_audience: preset.target_audience || 'all',
+      text_color: preset.text_color || f.text_color,
+      banner_bg_color: preset.banner_bg_color || f.banner_bg_color,
+      overlay_color: preset.overlay_color ?? f.overlay_color,
+      overlay_opacity:
+        typeof preset.overlay_opacity === 'number'
+          ? preset.overlay_opacity
+          : f.overlay_opacity,
+      use_image: true,
+      image_file: null,
+      image_url: presetImagePublicUrl(preset),
+    }));
+  }
 
   const prettyEventDate = (iso) =>
     iso
@@ -179,7 +227,7 @@ export default function AnnouncementsPage() {
   };
 
   async function uploadImageIfAny() {
-    if (!form.use_image || !form.image_file) return null; // nothing to upload
+    if (!form.use_image || !form.image_file) return form.image_url || null;
 
     const file = form.image_file;
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
@@ -196,20 +244,65 @@ export default function AnnouncementsPage() {
 
     if (upErr) {
       console.error('Upload error:', upErr);
-      return null;
+      return form.image_url || null;
     }
 
     const { data: pub } = supabase.storage.from('documents').getPublicUrl(path);
     return pub?.publicUrl || null;
   }
 
-  const handleSubmit = async (e) => {
+  function beginEdit(a) {
+    if (!a) return;
+
+    if (imageInputRef.current) imageInputRef.current.value = '';
+
+    let derivedExpiryMode = 'none';
+    let derivedExpiryDays = '14';
+    let derivedExpiresAt = '';
+
+    if (a.expires_after_days) {
+      derivedExpiryMode = 'duration';
+      derivedExpiryDays = String(a.expires_after_days);
+    } else if (a.expires_at) {
+      derivedExpiryMode = 'exact';
+      derivedExpiresAt = toDateInputValue(a.expires_at);
+    }
+
+    const publishMode =
+      a.publish_at && new Date(a.publish_at) > new Date() ? 'later' : 'now';
+
+    setEditingId(a.id);
+    setForm({
+      title: a.title || '',
+      subtitle: a.subtitle || '',
+      message: a.message || '',
+      target_audience: a.target_audience || 'all',
+      event_date: toDateInputValue(a.event_date),
+      expiry_mode: derivedExpiryMode,
+      expiry_days: derivedExpiryDays,
+      expires_at: derivedExpiresAt,
+      publish_mode: publishMode,
+      publish_at: toDateTimeLocalValue(a.publish_at),
+      use_image: Boolean(a.image_url),
+      image_file: null,
+      image_url: a.image_url || '',
+      text_color: a.text_color || '#ffffff',
+      banner_bg_color: a.banner_bg_color || '#1d4ed8',
+      overlay_color: a.overlay_color || '#000000',
+      overlay_opacity:
+        typeof a.overlay_opacity === 'number' ? a.overlay_opacity : 45,
+    });
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function handleSubmit(e) {
     e.preventDefault();
+
     if (!form.title.trim() || !form.message.trim()) return;
 
     setPosting(true);
 
-    // auth
     const { data: userData, error: authError } = await supabase.auth.getUser();
     if (authError || !userData?.user?.id) {
       console.error('User not authenticated');
@@ -217,19 +310,12 @@ export default function AnnouncementsPage() {
       return;
     }
 
-    // Upload image (if toggled on)
-    let finalImageUrl = form.image_url || null;
-    if (form.use_image) {
-      const uploaded = await uploadImageIfAny();
-      if (uploaded) finalImageUrl = uploaded;
-    }
+    const finalImageUrl = form.use_image ? await uploadImageIfAny() : null;
 
-    // event date
     const eventDateISO = form.event_date
       ? new Date(form.event_date).toISOString()
       : null;
 
-    // expiry
     let expires_at = null;
     let expires_after_days = null;
 
@@ -257,85 +343,103 @@ export default function AnnouncementsPage() {
         : null;
     }
 
-    // Build payload — include style fields if you’ve added them in DB; otherwise they’ll be ignored.
+    const publish_at =
+      form.publish_mode === 'later' && form.publish_at
+        ? new Date(form.publish_at).toISOString()
+        : new Date().toISOString();
+
     const payload = {
       title: form.title.trim(),
-      subtitle: form.subtitle?.trim() || null,
       message: form.message.trim(),
       target_audience: form.target_audience,
-      building_id: buildingId,
-      created_by: userData.user.id,
       event_date: eventDateISO,
       expires_at,
       expires_after_days,
-      image_url: finalImageUrl, // optional
-      text_color: form.text_color || null, // optional
+      publish_at,
+      image_url: finalImageUrl,
+      text_color: form.text_color || null,
       banner_bg_color: form.banner_bg_color || null,
       overlay_color: form.overlay_color || null,
-      overlay_opacity: form.overlay_opacity, // number 0..100; store if you add column
+      overlay_opacity: form.overlay_opacity,
     };
 
-    const { error } = await supabase.from('announcements').insert([payload]);
+    if (!editingId) {
+      payload.building_id = buildingId;
+      payload.created_by = userData.user.id;
+    }
+
+    let result;
+
+    if (editingId) {
+      result = await supabase
+        .from('announcements')
+        .update(payload)
+        .eq('id', editingId)
+        .eq('building_id', buildingId)
+        .select('*')
+        .maybeSingle();
+    } else {
+      result = await supabase
+        .from('announcements')
+        .insert([payload])
+        .select('*')
+        .maybeSingle();
+    }
+
+    console.log('save result:', result);
+    const { data, error } = result;
 
     if (error) {
-      console.error('Insert error:', error);
+      console.error('Save error:', error);
       setBanner({
         type: 'error',
-        msg: 'Failed to post announcement. Please try again.',
+        msg: error.message || 'Failed to save announcement.',
       });
-      clearTimeout(bannerTimerRef.current);
-      bannerTimerRef.current = setTimeout(() => setBanner(null), 5000);
+    } else if (!data) {
+      console.warn(
+        'No row was inserted/updated. Likely RLS or filter mismatch.'
+      );
+      setBanner({
+        type: 'error',
+        msg: 'No rows were updated. This is usually an RLS policy or row-match issue.',
+      });
     } else {
-      // reset form
-      if (imageInputRef.current) imageInputRef.current.value = '';
-      setForm((f) => ({
-        ...f,
-        title: '',
-        subtitle: '',
-        message: '',
-        target_audience: 'all',
-        event_date: '',
-        expiry_mode: 'none',
-        expiry_days: '14',
-        expires_at: '',
-        image_file: null,
-        image_url: '',
-      }));
-      fetchAnnouncements();
-
-      // success banner
-      setBanner({ type: 'success', msg: 'Announcement posted successfully!' });
-      clearTimeout(bannerTimerRef.current);
-      bannerTimerRef.current = setTimeout(() => setBanner(null), 3500);
+      resetForm();
+      await fetchAnnouncements();
+      setBanner({
+        type: 'success',
+        msg: editingId
+          ? 'Announcement updated successfully!'
+          : 'Announcement saved successfully!',
+      });
     }
-    setPosting(false);
-  };
+  }
 
-  const handleDelete = async (id) => {
+  async function handleDelete(id) {
     if (!id) return;
     if (!confirm('Delete this announcement?')) return;
+
     setDeletingId(id);
+
     const { error } = await supabase
       .from('announcements')
       .delete()
       .eq('id', id)
       .eq('building_id', buildingId);
+
     if (error) {
       console.error('Delete error:', error);
     } else {
       setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+      if (editingId === id) resetForm();
     }
-    setDeletingId(null);
-  };
 
-  // ---------- PREVIEW COMPOSITION ----------
+    setDeletingId(null);
+  }
+
   const preview = {
     title: form.title || 'Announcement title',
-    subtitle:
-      form.subtitle ||
-      (form.message
-        ? form.message.slice(0, 120)
-        : 'Optional subtitle or first line of message…'),
+    message: form.message || 'Write the announcement details...',
     dateLine: form.event_date
       ? new Date(form.event_date).toLocaleDateString(undefined, {
           weekday: 'long',
@@ -355,45 +459,40 @@ export default function AnnouncementsPage() {
     overlayOpacity: Math.max(
       0,
       Math.min(100, Number(form.overlay_opacity) || 0)
-    ), // %
+    ),
   };
 
   return (
     <div className="absolute left-0 md:left-16 right-0 top-16 bottom-0 bg-background p-6 space-y-12 overflow-auto">
-      {/* Floating success/error banner */}
       {banner && (
         <div
           className={[
             'fixed top-6 left-1/2 -translate-x-1/2 z-[9999]',
             'px-4 py-3 rounded-lg shadow-xl text-white',
-            'transition-opacity duration-300 ease-out',
             banner.type === 'success' ? 'bg-emerald-600' : 'bg-red-600',
           ].join(' ')}
           role="status"
           aria-live="polite"
         >
           <div className="flex items-center gap-2">
-            {/* simple dot icon */}
             <span className="inline-block h-2 w-2 rounded-full bg-white/90" />
             <span className="font-medium">{banner.msg}</span>
           </div>
         </div>
       )}
 
-      {/* Presets Picker */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle>Announcement Presets</CardTitle>
             <span className="text-xs text-muted-foreground">
-              Pick a preset; then set an event date.
+              Pick a preset; then set dates if needed.
             </span>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
-            {/* Preset select */}
             <div className="md:col-span-1 grid gap-2">
               <Label htmlFor="preset">Preset</Label>
               <Select
@@ -417,7 +516,6 @@ export default function AnnouncementsPage() {
               </Select>
             </div>
 
-            {/* Event date (binds to the same form field the lower section uses) */}
             <div className="grid gap-2">
               <Label htmlFor="preset_event_date">Event date</Label>
               <Input
@@ -427,12 +525,10 @@ export default function AnnouncementsPage() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, event_date: e.target.value }))
                 }
-                // optional: prevent past dates
                 min={new Date().toISOString().slice(0, 10)}
               />
             </div>
 
-            {/* Apply button */}
             <div className="flex items-end">
               <Button
                 type="button"
@@ -448,11 +544,11 @@ export default function AnnouncementsPage() {
             </div>
           </div>
 
-          {/* Mini preview of the selected preset (unchanged) */}
           {selectedPresetId &&
             (() => {
               const p = presets.find((pp) => pp.id === selectedPresetId);
               const url = presetImagePublicUrl(p);
+
               return (
                 <div className="grid gap-2">
                   <Label>Selected preset preview</Label>
@@ -512,14 +608,23 @@ export default function AnnouncementsPage() {
         )}
       </Card>
 
-      {/* Create / Edit */}
       <Card>
         <CardHeader>
-          <CardTitle>Create new announcement</CardTitle>
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle>
+              {editingId ? 'Edit announcement' : 'Create new announcement'}
+            </CardTitle>
+
+            {editingId ? (
+              <Button type="button" variant="outline" onClick={resetForm}>
+                Cancel editing
+              </Button>
+            ) : null}
+          </div>
         </CardHeader>
+
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-6">
-            {/* Text fields */}
             <div className="grid gap-2">
               <Label htmlFor="title">Title</Label>
               <Input
@@ -530,18 +635,6 @@ export default function AnnouncementsPage() {
                   setForm((f) => ({ ...f, title: e.target.value }))
                 }
                 required
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="subtitle">Subtitle (optional)</Label>
-              <Input
-                id="subtitle"
-                placeholder="Short supporting line"
-                value={form.subtitle}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, subtitle: e.target.value }))
-                }
               />
             </div>
 
@@ -559,7 +652,6 @@ export default function AnnouncementsPage() {
               />
             </div>
 
-            {/* Audience & Event Date */}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="audience">Target audience</Label>
@@ -593,7 +685,47 @@ export default function AnnouncementsPage() {
               </div>
             </div>
 
-            {/* Expiry */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label>Publish</Label>
+                <Select
+                  value={form.publish_mode}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, publish_mode: v }))
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select publish timing" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="now">Post now</SelectItem>
+                    <SelectItem value="later">Schedule for later</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {form.publish_mode === 'later' ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="publish_at">Publish At</Label>
+                  <Input
+                    id="publish_at"
+                    type="datetime-local"
+                    value={form.publish_at}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, publish_at: e.target.value }))
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  <Label>Status</Label>
+                  <div className="h-10 rounded-md border px-3 flex items-center text-sm text-muted-foreground">
+                    Will publish immediately when saved
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="grid gap-2">
               <Label>Expiry Mode</Label>
               <div className="grid gap-3 md:grid-cols-3">
@@ -625,7 +757,6 @@ export default function AnnouncementsPage() {
                       id="expiry_days"
                       type="number"
                       min={1}
-                      placeholder="e.g., 14"
                       value={form.expiry_days}
                       onChange={(e) =>
                         setForm((f) => ({ ...f, expiry_days: e.target.value }))
@@ -653,9 +784,7 @@ export default function AnnouncementsPage() {
               </div>
             </div>
 
-            {/* Media + Styles */}
             <div className="grid gap-6 md:grid-cols-2">
-              {/* Left: Image + toggles */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <input
@@ -691,6 +820,13 @@ export default function AnnouncementsPage() {
                         </Button>
                       )}
                     </div>
+
+                    {form.image_url && !form.image_file ? (
+                      <div className="text-xs text-muted-foreground">
+                        Existing image will be kept unless you upload a new one.
+                      </div>
+                    ) : null}
+
                     <div className="grid grid-cols-2 gap-3">
                       <div className="grid gap-2">
                         <Label htmlFor="overlay_color">Overlay color</Label>
@@ -706,6 +842,7 @@ export default function AnnouncementsPage() {
                           }
                         />
                       </div>
+
                       <div className="grid gap-2">
                         <Label htmlFor="overlay_opacity">
                           Overlay opacity (%)
@@ -758,7 +895,6 @@ export default function AnnouncementsPage() {
                 </div>
               </div>
 
-              {/* Right: Live Preview */}
               <div className="space-y-2">
                 <div className="text-sm font-medium">Preview</div>
                 <AnnouncementPreviewCard preview={preview} />
@@ -769,14 +905,28 @@ export default function AnnouncementsPage() {
             </div>
           </CardContent>
 
-          <CardFooter className="justify-end">
+          <CardFooter className="justify-end gap-2">
+            {editingId ? (
+              <Button type="button" variant="outline" onClick={resetForm}>
+                Cancel
+              </Button>
+            ) : null}
+
             <Button type="submit" disabled={posting}>
               {posting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : editingId ? (
+                <Pencil className="mr-2 h-4 w-4" />
               ) : (
                 <ImageIcon className="mr-2 h-4 w-4" />
               )}
-              {posting ? 'Posting…' : 'Post Announcement'}
+              {posting
+                ? editingId
+                  ? 'Saving…'
+                  : 'Posting…'
+                : editingId
+                  ? 'Save Changes'
+                  : 'Post Announcement'}
             </Button>
           </CardFooter>
         </form>
@@ -784,7 +934,6 @@ export default function AnnouncementsPage() {
 
       <Separator />
 
-      {/* List */}
       <div className="space-y-4">
         {loading ? (
           <>
@@ -799,65 +948,99 @@ export default function AnnouncementsPage() {
             </CardContent>
           </Card>
         ) : (
-          announcements.map((a) => (
-            <Card key={a.id}>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-4">
-                  <CardTitle className="text-lg">{a.title}</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="shrink-0 capitalize">
-                      {a.target_audience || 'all'}
-                    </Badge>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      onClick={() => handleDelete(a.id)}
-                      disabled={deletingId === a.id}
-                      title="Delete announcement"
-                    >
-                      {deletingId === a.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+          announcements.map((a) => {
+            const isScheduled =
+              a.publish_at && new Date(a.publish_at) > new Date();
+
+            return (
+              <Card key={a.id}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between gap-4">
+                    <CardTitle className="text-lg">{a.title}</CardTitle>
+
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      <Badge variant="secondary" className="capitalize">
+                        {a.target_audience || 'all'}
+                      </Badge>
+
+                      {isScheduled ? (
+                        <Badge variant="outline" className="gap-1">
+                          <CalendarClock className="h-3 w-3" />
+                          Scheduled
+                        </Badge>
                       ) : (
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <Badge variant="outline">Live</Badge>
                       )}
-                    </Button>
+
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        onClick={() => beginEdit(a)}
+                        title="Edit announcement"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        onClick={() => handleDelete(a.id)}
+                        disabled={deletingId === a.id}
+                        title="Delete announcement"
+                      >
+                        {deletingId === a.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {a.event_date && (
-                  <div className="text-xs text-muted-foreground">
-                    Event: <b>{prettyEventDate(a.event_date)}</b>
-                  </div>
-                )}
-                {a.subtitle && <div className="text-sm">{a.subtitle}</div>}
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {a.message}
-                </p>
-                <div className="text-xs text-muted-foreground">
-                  Posted: {new Date(a.created_at).toLocaleString()}
-                  {a.expires_at && (
-                    <>
-                      {' '}
-                      · Expires: {new Date(a.expires_at).toLocaleDateString()}
-                    </>
+                </CardHeader>
+
+                <CardContent className="space-y-2">
+                  {a.event_date && (
+                    <div className="text-xs text-muted-foreground">
+                      Event: <b>{prettyEventDate(a.event_date)}</b>
+                    </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
-          ))
+
+                  {a.publish_at && (
+                    <div className="text-xs text-muted-foreground">
+                      {isScheduled ? 'Publishes:' : 'Published:'}{' '}
+                      <b>{new Date(a.publish_at).toLocaleString()}</b>
+                    </div>
+                  )}
+
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {a.message}
+                  </p>
+
+                  <div className="text-xs text-muted-foreground">
+                    Posted: {new Date(a.created_at).toLocaleString()}
+                    {a.expires_at && (
+                      <>
+                        {' '}
+                        · Expires: {new Date(a.expires_at).toLocaleDateString()}
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
         )}
       </div>
     </div>
   );
 }
 
-/* ---------- Visual preview card (matches dashboard banner behavior) ---------- */
 function AnnouncementPreviewCard({ preview }) {
   const {
     title,
-    subtitle,
+    message,
     dateLine,
     imagePreviewUrl,
     useImage,
@@ -867,16 +1050,9 @@ function AnnouncementPreviewCard({ preview }) {
     overlayOpacity,
   } = preview;
 
-  const overlay = useImage
-    ? `${overlayColor}${percentToHex(overlayOpacity)}`
-    : null;
-
   return (
     <div
-      className={[
-        'relative rounded-xl overflow-hidden border shadow-xl',
-        'h-28 md:h-32',
-      ].join(' ')}
+      className="relative rounded-xl overflow-hidden border shadow-xl h-28 md:h-32"
       style={
         useImage && imagePreviewUrl
           ? {
@@ -896,19 +1072,22 @@ function AnnouncementPreviewCard({ preview }) {
         />
       )}
 
-      <div className="relative h-full w-full px-4 md:px-6 flex items-center justify-between">
-        <div style={{ color: textColor }}>
+      <div className="relative h-full w-full px-4 md:px-6 flex items-center">
+        <div style={{ color: textColor }} className="max-w-[85%]">
           <div className="text-[10px] md:text-xs uppercase opacity-80">
             Announcement
           </div>
+
           <div className="text-base md:text-lg font-semibold leading-tight line-clamp-1">
             {title}
           </div>
-          {subtitle && (
-            <div className="text-xs md:text-sm opacity-90 line-clamp-1">
-              {subtitle}
+
+          {message && (
+            <div className="text-xs md:text-sm opacity-90 line-clamp-2 mt-1">
+              {message}
             </div>
           )}
+
           {dateLine && (
             <div className="text-[10px] md:text-xs opacity-80 mt-1">
               {dateLine}
@@ -920,14 +1099,12 @@ function AnnouncementPreviewCard({ preview }) {
   );
 }
 
-/* ---------- tiny color helpers ---------- */
 function percentToHex(p) {
-  // 0..100 -> 00..FF
   const n = Math.round((Math.max(0, Math.min(100, p)) / 100) * 255);
   return n.toString(16).padStart(2, '0');
 }
+
 function hexWithAlpha(hex, p) {
-  // hex like #rrggbb, add alpha
   if (!/^#([0-9a-f]{6})$/i.test(hex)) return hex;
   return `${hex}${percentToHex(p)}`;
 }

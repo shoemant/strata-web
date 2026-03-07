@@ -10,23 +10,11 @@ import { CalendarIcon, ArrowUpRight } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { labelForType, badgeVariantForType } from '@/lib/dates';
 
-/**
- * Shared ScheduleCard
- *
- * Props:
- * - basePath: string (recommended)
- *    Example:
- *      Manager: `/manager/buildings/${building.id}`
- *      Owner:   `/owner/buildings/${building.id}`
- *      Tenant:  `/tenant/buildings/${building.id}`
- *
- * - hrefFor?: (sub: "resources"|"announcements"|"maintenance") => string
- *    Optional override if routing differs for any role.
- */
 export default function ScheduleCard({
   basePath,
   hrefFor,
   announcements = [],
+  events = [],
   pending = [],
   completed = [],
   bookings = [],
@@ -34,7 +22,6 @@ export default function ScheduleCard({
   const [calDate, setCalDate] = useState(null);
   const listRef = useRef(null);
 
-  // helper: format YYYY-MM-DD
   const ymd = (d) => {
     const x = new Date(d);
     return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(
@@ -47,18 +34,19 @@ export default function ScheduleCard({
     return basePath ? `${basePath}/${sub}` : '#';
   };
 
-  // events with dots
   const eventDays = useMemo(() => {
     const set = new Set();
     const add = (ts) => ts && set.add(ymd(ts));
+
     bookings.forEach((bk) => add(bk.start_time));
     announcements.forEach((a) => add(a.event_date || a.created_at));
+    events.forEach((e) => add(e.start_at));
     pending.forEach((r) => add(r.submitted_at));
     completed.forEach((r) => add(r.updated_at));
-    return set;
-  }, [bookings, announcements, pending, completed]);
 
-  // schedule items for selected date
+    return set;
+  }, [bookings, announcements, events, pending, completed]);
+
   const scheduleItems = useMemo(() => {
     if (!calDate) return [];
 
@@ -89,7 +77,7 @@ export default function ScheduleCard({
 
     announcements.forEach((a) => {
       const ts = a.event_date || a.created_at;
-      if (inDay(ts))
+      if (inDay(ts)) {
         items.push({
           id: `ann-${a.id}`,
           when: fmtHM(ts),
@@ -97,7 +85,20 @@ export default function ScheduleCard({
           type: 'announcement',
           href: resolveHref('announcements'),
         });
+      }
     });
+
+    events
+      .filter((e) => inDay(e.start_at))
+      .forEach((e) =>
+        items.push({
+          id: `ev-${e.id}`,
+          when: fmtHM(e.start_at),
+          title: `Event: ${e.title}`,
+          type: 'event',
+          href: resolveHref('events'),
+        })
+      );
 
     pending
       .filter((r) => inDay(r.submitted_at))
@@ -123,8 +124,21 @@ export default function ScheduleCard({
         })
       );
 
-    return items.sort((a, b) => a.when.localeCompare(b.when));
-  }, [calDate, bookings, announcements, pending, completed, basePath, hrefFor]);
+    return items.sort((a, b) => {
+      const aTime = a.when || '';
+      const bTime = b.when || '';
+      return aTime.localeCompare(bTime);
+    });
+  }, [
+    calDate,
+    bookings,
+    announcements,
+    events,
+    pending,
+    completed,
+    basePath,
+    hrefFor,
+  ]);
 
   useEffect(() => {
     if (scheduleItems.length > 0 && listRef.current) {
@@ -210,7 +224,7 @@ export default function ScheduleCard({
                           href={ev.href}
                           className="text-xs text-primary hover:text-primary/80 inline-flex items-center mt-1"
                         >
-                          Open {labelForType(ev.type)}{' '}
+                          Open {labelForType(ev.type)}
                           <ArrowUpRight className="h-3 w-3 ml-1" />
                         </Link>
                       </div>

@@ -4,11 +4,14 @@ import OffersCard from './_components/OffersCard';
 import OwnerMaintenanceCard from './_components/OwnerMaintenanceCard';
 import OwnerPollsCard from './_components/OwnerPollsCard';
 import ScheduleCard from '@/components/dashboard/ScheduleCard';
+import UpcomingEventsCard from '@/components/dashboard/UpcomingEventsCard';
 
 export function getOwnerDashboardModules({
   building,
   buildingId,
   announcements,
+  events,
+  polls,
   upcomingBookings,
   openRequests,
   openPollsCount,
@@ -17,12 +20,30 @@ export function getOwnerDashboardModules({
     {
       key: 'resources', // feature key in building_features
       title: 'Upcoming Bookings',
-      area: 'main',
+      area: 'sidebar',
       priority: 10,
       render: () => (
         <UpcomingBookingsCard
           buildingId={buildingId}
           upcomingBookings={upcomingBookings}
+        />
+      ),
+    },
+    {
+      key: 'upcoming-events',
+      title: 'Upcoming Events',
+      area: 'main',
+      priority: 5,
+      always: true,
+      render: () => (
+        <UpcomingEventsCard
+          basePath={`/owner/buildings/${buildingId}`}
+          announcements={announcements}
+          events={events}
+          polls={polls}
+          role="owner"
+          visibleCount={4}
+          limit={8}
         />
       ),
     },

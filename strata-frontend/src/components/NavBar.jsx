@@ -31,6 +31,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Menu,
+  CalendarDays,
 } from 'lucide-react';
 
 import {
@@ -126,6 +127,11 @@ function getBuildingNav(role, buildingId) {
         icon: Bell,
         label: 'Announcements',
         featureKey: 'announcements',
+      },
+      {
+        href: `/manager/buildings/${buildingId}/events`,
+        icon: CalendarDays,
+        label: 'Events',
       },
       {
         href: `/manager/buildings/${buildingId}/documents`,
@@ -478,7 +484,6 @@ export default function NavBar() {
               expanded ? 'w-64' : 'w-20',
             ].join(' ')}
           >
-            {/* Header (your existing header block) */}
             <div className="px-2 py-3 relative">
               <div className="flex items-center justify-center h-16">
                 <Link

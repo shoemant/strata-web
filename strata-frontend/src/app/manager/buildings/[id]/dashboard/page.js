@@ -30,6 +30,9 @@ export default function ManagerDashboard() {
 
   const [fatalError, setFatalError] = useState('');
   const [openPollsCount, setOpenPollsCount] = useState(0);
+  const [polls, setPolls] = useState([]);
+
+  const [events, setEvents] = useState([]);
 
   const loadedForUserRef = useRef(null);
   const userId = session?.user?.id;
@@ -41,11 +44,13 @@ export default function ManagerDashboard() {
     const all = getDashboardModules({
       building,
       announcements,
+      events,
+      polls,
       pending,
       completed,
       resources,
       bookings,
-      openPollsCount, // ✅ pass into module registry
+      openPollsCount,
     });
 
     return (all || []).filter((m) => {
@@ -57,6 +62,7 @@ export default function ManagerDashboard() {
   }, [
     building,
     announcements,
+    events,
     pending,
     completed,
     resources,
@@ -138,23 +144,31 @@ export default function ManagerDashboard() {
         const enabledNow = resolveEnabledFeatures(featRow ?? null, 'manager');
 
         // ✅ include open poll count here
-        const [pendRes, compRes, annRes, resRes, pollCount] = await Promise.all(
-          [
-            supabase
-              .from('maintenance_requests')
-              .select('*')
-              .eq('building_id', b.id)
-              .eq('status', 'pending'),
-            supabase
-              .from('maintenance_requests')
-              .select('*')
-              .eq('building_id', b.id)
-              .eq('status', 'completed'),
-            supabase.from('announcements').select('*').eq('building_id', b.id),
-            supabase.from('resources').select('*').eq('building_id', b.id),
-            fetchOpenPollCount(supabase, b.id),
-          ]
-        );
+        const [
+          pendRes,
+          compRes,
+          annRes,
+          resRes,
+          eventsRes,
+          pollsRes,
+          pollCount,
+        ] = await Promise.all([
+          supabase
+            .from('maintenance_requests')
+            .select('*')
+            .eq('building_id', b.id)
+            .eq('status', 'pending'),
+          supabase
+            .from('maintenance_requests')
+            .select('*')
+            .eq('building_id', b.id)
+            .eq('status', 'completed'),
+          supabase.from('announcements').select('*').eq('building_id', b.id),
+          supabase.from('resources').select('*').eq('building_id', b.id),
+          supabase.from('events').select('*').eq('building_id', b.id),
+          supabase.from('polls').select('*').eq('building_id', b.id),
+          fetchOpenPollCount(supabase, b.id),
+        ]);
 
         if (canceled) return;
 
@@ -171,8 +185,10 @@ export default function ManagerDashboard() {
         setAnnouncements(annRes.data || []);
         setResources(resRes.data || []);
         setBookings([]);
+        setEvents(eventsRes.data || []);
 
         setOpenPollsCount(pollCount || 0);
+        setPolls(pollsRes.data || []);
 
         loadedForUserRef.current = userId;
       } finally {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useSessionContext,
   useSupabaseClient,
@@ -8,32 +8,20 @@ import {
 
 import ProtectedRoute from '@/components/ProtectedRoute';
 import HeroWithAnnouncements from '@/components/dashboard/HeroWithAnnouncements';
-import ScheduleCard from '@/components/dashboard/ScheduleCard';
 
-import {
-  ArrowUpRight,
-  Calendar,
-  Wrench,
-  FileText,
-  Building2,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  TrendingUp,
-  Gift,
-  Sparkles,
-} from 'lucide-react';
+import { resolveEnabledFeatures } from '@/lib/feature';
+import { getOwnerDashboardModules } from './_modules';
+
+import { Building2, AlertCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
   Card,
-  CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // -----------------------------
@@ -52,7 +40,7 @@ function formatDateTime(iso) {
 }
 
 // -----------------------------
-// Fetch helpers (MATCH YOUR DB)
+// Fetch helpers
 // -----------------------------
 async function fetchHeroImageUrl(supabase, buildingId) {
   if (!buildingId) return null;
@@ -120,18 +108,47 @@ async function fetchOwnerAnnouncements(supabase, buildingId) {
     .select('*')
     .eq('building_id', buildingId)
     .in('target_audience', ['all', 'owners'])
+    .or(`publish_at.is.null,publish_at.lte.${nowIso}`)
     .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    .order('publish_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false });
 
   if (error) throw error;
   return data || [];
 }
 
-/**
- * BOOKINGS NOTE:
- * Supabase can't join bookings.resource_id -> resources.id unless there's an FK.
- * So we fetch bookings, then fetch resources separately and merge.
- */
+async function fetchOwnerEvents(supabase, buildingId) {
+  if (!buildingId) return [];
+  const nowIso = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('events')
+    .select('*')
+    .eq('building_id', buildingId)
+    .in('target_audience', ['all', 'owners'])
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    .order('start_at', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchOwnerPolls(supabase, buildingId) {
+  if (!buildingId) return [];
+  const nowIso = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('polls')
+    .select('*')
+    .eq('building_id', buildingId)
+    .lte('starts_at', nowIso)
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    .order('expires_at', { ascending: true, nullsFirst: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
 async function fetchUpcomingBookings(
   supabase,
   { buildingId, userId, limit = 5 }
@@ -229,6 +246,19 @@ async function fetchCounts(supabase, { buildingId, userId }) {
   };
 }
 
+async function fetchBuildingFeatures(supabase, buildingId) {
+  if (!buildingId) return null;
+
+  const { data, error } = await supabase
+    .from('building_features')
+    .select('*')
+    .eq('building_id', buildingId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ?? null;
+}
+
 // -----------------------------
 // Component
 // -----------------------------
@@ -252,16 +282,22 @@ export default function OwnerDashboard() {
 
   const [upcomingBookings, setUpcomingBookings] = useState([]);
   const [openRequests, setOpenRequests] = useState([]);
+  const [openPollsCount, setOpenPollsCount] = useState(0);
+
+  const [events, setEvents] = useState([]);
+  const [polls, setPolls] = useState([]);
+
+  const [featuresRow, setFeaturesRow] = useState(null);
+  const [enabled, setEnabled] = useState(null);
 
   const loadedForUserRef = useRef(null);
-
-  const [openPollsCount, setOpenPollsCount] = useState(0);
 
   useEffect(() => {
     if (!userId) return;
     if (loadedForUserRef.current === userId) return;
 
     let canceled = false;
+
     (async () => {
       setLoading(true);
       setError(null);
@@ -277,22 +313,39 @@ export default function OwnerDashboard() {
         if (!buildingId || !building?.id) {
           setBuilding(null);
           setAnnouncements([]);
+          setEvents([]);
+          setPolls([]);
           setUpcomingBookings([]);
           setOpenRequests([]);
           setCounts({ upcomingBookings: 0, openRequests: 0, documents: 0 });
           setOpenPollsCount(0);
+          setFeaturesRow(null);
+          setEnabled(resolveEnabledFeatures(null, 'owner'));
           loadedForUserRef.current = userId;
           return;
         }
-        const [a, heroUrl, cts, bookings, requests, openPollCount] =
-          await Promise.all([
-            fetchOwnerAnnouncements(supabase, buildingId),
-            fetchHeroImageUrl(supabase, buildingId),
-            fetchCounts(supabase, { buildingId, userId }),
-            fetchUpcomingBookings(supabase, { buildingId, userId, limit: 5 }),
-            fetchOpenRequests(supabase, { buildingId, userId, limit: 5 }),
-            fetchOpenPollCount(supabase, buildingId),
-          ]);
+
+        const [
+          a,
+          ownerEvents,
+          ownerPolls,
+          heroUrl,
+          cts,
+          bookings,
+          requests,
+          openPollCount,
+          featureRow,
+        ] = await Promise.all([
+          fetchOwnerAnnouncements(supabase, buildingId),
+          fetchOwnerEvents(supabase, buildingId),
+          fetchOwnerPolls(supabase, buildingId),
+          fetchHeroImageUrl(supabase, buildingId),
+          fetchCounts(supabase, { buildingId, userId }),
+          fetchUpcomingBookings(supabase, { buildingId, userId, limit: 5 }),
+          fetchOpenRequests(supabase, { buildingId, userId, limit: 5 }),
+          fetchOpenPollCount(supabase, buildingId),
+          fetchBuildingFeatures(supabase, buildingId),
+        ]);
 
         if (canceled) return;
 
@@ -305,14 +358,21 @@ export default function OwnerDashboard() {
         setCounts(cts);
         setUpcomingBookings(bookings || []);
         setOpenRequests(requests || []);
-
         setOpenPollsCount(openPollCount || 0);
+
+        setAnnouncements(a || []);
+        setEvents(ownerEvents || []);
+        setPolls(ownerPolls || []);
+
+        setFeaturesRow(featureRow ?? null);
+        setEnabled(resolveEnabledFeatures(featureRow ?? null, 'owner'));
 
         loadedForUserRef.current = userId;
       } catch (e) {
         console.error(e);
-        if (!canceled)
+        if (!canceled) {
           setError(e?.message || 'Something went wrong loading the dashboard.');
+        }
       } finally {
         if (!canceled) setLoading(false);
       }
@@ -322,6 +382,55 @@ export default function OwnerDashboard() {
       canceled = true;
     };
   }, [userId, supabase]);
+
+  const buildingId = building?.id;
+
+  const modules = useMemo(() => {
+    if (!buildingId) return [];
+
+    const all = getOwnerDashboardModules({
+      building,
+      buildingId,
+      announcements,
+      events,
+      polls,
+      upcomingBookings,
+      openRequests,
+      openPollsCount,
+      counts,
+      featuresRow,
+      enabled,
+    });
+
+    return (all || []).filter((m) => {
+      if (m.always) return true;
+      if (!enabled) return true; // fail open
+      if (typeof enabled[m.key] === 'boolean') return enabled[m.key];
+      return true;
+    });
+  }, [
+    building,
+    buildingId,
+    announcements,
+    events,
+    polls,
+    upcomingBookings,
+    openRequests,
+    openPollsCount,
+    counts,
+    featuresRow,
+    enabled,
+  ]);
+
+  const main = useMemo(
+    () => modules.filter((m) => m.area === 'main'),
+    [modules]
+  );
+
+  const sidebar = useMemo(
+    () => modules.filter((m) => m.area === 'sidebar'),
+    [modules]
+  );
 
   if (sessionLoading) {
     return (
@@ -364,13 +473,12 @@ export default function OwnerDashboard() {
     );
   }
 
-  const buildingId = building?.id;
-
   return (
     <ProtectedRoute allowedRoles={['owner']}>
       <div className="absolute top-0 bottom-0 left-0 md:left-16 right-0 bg-background px-4 md:px-6 lg:px-8 py-6 pt-[4rem] md:pt-6 overflow-auto">
         <div className="w-full mx-auto space-y-4">
           <div className="absolute inset-0 bg-[url('/abstract-geometric-pattern.png')] opacity-[0.02] bg-cover bg-center" />
+
           <div className="relative md:p-8">
             <HeroWithAnnouncements
               imageUrl={building?.hero_image_url}
@@ -400,56 +508,14 @@ export default function OwnerDashboard() {
                 </div>
               </div>
             </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Button
-                asChild
-                variant="outline"
-                size="lg"
-                className="gap-2 bg-transparent"
-              >
-                <a
-                  href={
-                    buildingId
-                      ? `/owner/buildings/${buildingId}/documents`
-                      : '/owner/documents'
-                  }
-                >
-                  <FileText className="h-4 w-4" />
-                  Documents
-                  <ArrowUpRight className="h-4 w-4" />
-                </a>
-              </Button>
-
-              <Button
-                asChild
-                size="lg"
-                className="gap-2 bg-primary hover:bg-primary/90"
-              >
-                <a
-                  href={
-                    buildingId
-                      ? `/owner/buildings/${buildingId}/resources`
-                      : '/owner/resources'
-                  }
-                >
-                  <Calendar className="h-4 w-4" />
-                  Book Amenity
-                  <ArrowUpRight className="h-4 w-4" />
-                </a>
-              </Button>
-            </div>
           </div>
 
           {error ? (
             <Card className="rounded-xl border-destructive/40 bg-destructive/5">
               <CardHeader>
-                <div className="flex items-center gap-3">
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                  <CardTitle className="text-destructive">
-                    Dashboard Error
-                  </CardTitle>
-                </div>
+                <CardTitle className="text-destructive">
+                  Dashboard Error
+                </CardTitle>
                 <CardDescription className="text-destructive/80">
                   {error}
                 </CardDescription>
@@ -468,377 +534,30 @@ export default function OwnerDashboard() {
             </Card>
           ) : null}
 
-          {/* Main grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* LEFT: bookings + maintenance cards */}
             <div className="lg:col-span-2 space-y-6">
-              <Card className="rounded-xl border-primary/20 shadow-sm hover:shadow-md transition-shadow">
-                <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-4">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-lg bg-primary/10">
-                        <Calendar className="h-4 w-4 text-primary" />
-                      </div>
-                      <CardTitle className="text-xl">
-                        Upcoming Bookings
-                      </CardTitle>
-                    </div>
-                    <CardDescription>
-                      Your next reservations and amenity bookings
-                    </CardDescription>
-                  </div>
-                  <Button
-                    asChild
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0 gap-1"
-                  >
-                    <a
-                      href={
-                        buildingId
-                          ? `/owner/buildings/${buildingId}/resources`
-                          : '/owner/resources'
-                      }
-                    >
-                      Create booking <ArrowUpRight className="h-3.5 w-3.5" />
-                    </a>
-                  </Button>
-                </CardHeader>
-
-                <CardContent className="space-y-3">
-                  {upcomingBookings?.length ? (
-                    upcomingBookings.map((b, idx) => (
-                      <div
-                        key={b.id}
-                        className="group flex items-start justify-between gap-4 rounded-xl border border-border/50 p-4 hover:border-primary/30 hover:bg-primary/5 transition-all"
-                      >
-                        <div className="min-w-0 flex-1 space-y-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
-                            <p className="font-semibold truncate text-foreground">
-                              {b?.resource?.name || 'Booking'}
-                            </p>
-
-                            {b?.status ? (
-                              <Badge
-                                variant={
-                                  b.status === 'confirmed'
-                                    ? 'default'
-                                    : 'secondary'
-                                }
-                                className="capitalize font-medium"
-                              >
-                                {String(b.status).replaceAll('_', ' ')}
-                              </Badge>
-                            ) : null}
-
-                            {b?.purpose ? (
-                              <Badge variant="outline" className="capitalize">
-                                {String(b.purpose).replaceAll('_', ' ')}
-                              </Badge>
-                            ) : null}
-                          </div>
-
-                          <p className="text-sm text-muted-foreground leading-relaxed">
-                            {formatDateTime(b.start_time)} →{' '}
-                            {formatDateTime(b.end_time)}
-                          </p>
-
-                          {b?.notes ? (
-                            <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-2 truncate">
-                              {b.notes}
-                            </p>
-                          ) : null}
-                        </div>
-
-                        <Button
-                          asChild
-                          variant="outline"
-                          size="sm"
-                          className="shrink-0 gap-1 group-hover:border-primary/50 bg-transparent"
-                        >
-                          <a
-                            href={
-                              buildingId
-                                ? `/owner/buildings/${buildingId}/bookings`
-                                : '/owner/bookings'
-                            }
-                          >
-                            View <ArrowUpRight className="h-3.5 w-3.5" />
-                          </a>
-                        </Button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-border p-8 text-center space-y-3">
-                      <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                        <Calendar className="h-6 w-6 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">
-                          No upcoming bookings
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Book an amenity to get started
-                        </p>
-                      </div>
-                      <Button asChild size="sm" className="mt-2">
-                        <a
-                          href={
-                            buildingId
-                              ? `/owner/buildings/${buildingId}/resources`
-                              : '/owner/resources'
-                          }
-                        >
-                          Create Booking
-                        </a>
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-xl border-purple-500/20 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-purple-500/5 to-background">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-purple-500/10">
-                      <Gift className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-xl">Offers </CardTitle>
-                      <CardDescription>
-                        Exclusive discounts for residents
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="group rounded-xl border border-purple-500/20 p-4 hover:border-purple-500/40 hover:bg-purple-500/5 transition-all">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1.5 flex-1">
-                        <div className="flex items-center gap-2">
-                          <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                          <p className="font-semibold text-foreground">
-                            SparkleClean
-                          </p>
-                          <Badge className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20">
-                            15% off
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Professional condo cleaning services
-                        </p>
-                        <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">
-                          Valid for residents • Limited time offer
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="group rounded-xl border border-orange-500/20 p-4 hover:border-orange-500/40 hover:bg-orange-500/5 transition-all">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1.5 flex-1">
-                        <div className="flex items-center gap-2">
-                          <Gift className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                          <p className="font-semibold text-foreground">
-                            Joe's Café
-                          </p>
-                          <Badge className="bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20">
-                            Free coffee
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Free coffee with breakfast purchase
-                        </p>
-                        <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">
-                          2 blocks away • Show resident ID
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-                <CardFooter className="flex justify-end pt-4 border-t">
-                  <Button
-                    variant="outline"
-                    disabled
-                    className="gap-2 bg-transparent"
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    View All Offers
-                  </Button>
-                </CardFooter>
-              </Card>
-
-              <Card className="rounded-xl border-orange-500/20 shadow-sm hover:shadow-md transition-shadow">
-                <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-4">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-lg bg-orange-500/10">
-                        <Wrench className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                      </div>
-                      <CardTitle className="text-xl">
-                        Maintenance Requests
-                      </CardTitle>
-                    </div>
-                    <CardDescription>
-                      Track your service requests and updates
-                    </CardDescription>
-                  </div>
-                  <Button
-                    asChild
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0 gap-1"
-                  >
-                    <a href={`/owner/buildings/${buildingId}/maintenance`}>
-                      Create request <ArrowUpRight className="h-3.5 w-3.5" />
-                    </a>
-                  </Button>
-                </CardHeader>
-
-                <CardContent className="space-y-3">
-                  {openRequests?.length ? (
-                    openRequests.map((r) => (
-                      <div
-                        key={r.id}
-                        className="group flex items-start justify-between gap-4 rounded-xl border border-border/50 p-4 hover:border-orange-500/30 hover:bg-orange-500/5 transition-all"
-                      >
-                        <div className="min-w-0 flex-1 space-y-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Wrench className="h-4 w-4 text-muted-foreground shrink-0" />
-                            <p className="font-semibold truncate text-foreground">
-                              {r.title || 'Request'}
-                            </p>
-                            {r?.status ? (
-                              <Badge
-                                variant={
-                                  r.status === 'in_progress'
-                                    ? 'default'
-                                    : 'secondary'
-                                }
-                                className="capitalize font-medium"
-                              >
-                                {String(r.status).replaceAll('_', ' ')}
-                              </Badge>
-                            ) : null}
-                          </div>
-
-                          <p className="text-sm text-muted-foreground leading-relaxed">
-                            Submitted {formatDateTime(r.submitted_at)}
-                            {r.updated_at && r.updated_at !== r.submitted_at
-                              ? ` • Updated ${formatDateTime(r.updated_at)}`
-                              : ''}
-                          </p>
-                        </div>
-
-                        <Button
-                          asChild
-                          variant="outline"
-                          size="sm"
-                          className="shrink-0 gap-1 group-hover:border-orange-500/50 bg-transparent"
-                        >
-                          <a
-                            href={`/owner/buildings/${buildingId}/maintenance`}
-                          >
-                            View <ArrowUpRight className="h-3.5 w-3.5" />
-                          </a>
-                        </Button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-border p-8 text-center space-y-3">
-                      <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                        <CheckCircle2 className="h-6 w-6 text-green-500" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">
-                          All clear!
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          No open maintenance requests
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              {main.map((m) => (
+                <div key={m.key}>{m.render()}</div>
+              ))}
             </div>
 
-            {/* RIGHT: schedule + additional info */}
             <div className="space-y-6">
-              <Card className="rounded-xl border-border/60 shadow-sm hover:shadow-md transition-shadow">
-                <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-4">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-lg bg-blue-500/10">
-                        <TrendingUp className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <CardTitle className="text-xl">
-                        Polls &amp; Votes
-                      </CardTitle>
-                    </div>
-                    <CardDescription>
-                      Participate in building polls and view results.
-                    </CardDescription>
-                  </div>
-
-                  <Button
-                    asChild
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 gap-1 bg-transparent"
-                  >
-                    <a
-                      href={
-                        buildingId
-                          ? `/owner/buildings/${buildingId}/polls`
-                          : '/owner/polls'
-                      }
-                    >
-                      View <ArrowUpRight className="h-3.5 w-3.5" />
-                    </a>
-                  </Button>
-                </CardHeader>
-
-                <CardContent className="space-y-3">
-                  {openPollsCount > 0 ? (
-                    <div className="flex items-center justify-between rounded-xl border border-border/50 p-4">
-                      <div className="min-w-0">
-                        <div className="font-medium text-foreground">
-                          Open polls available
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          You have {openPollsCount} poll
-                          {openPollsCount === 1 ? '' : 's'} to vote on.
-                        </div>
-                      </div>
-                      <Badge className="shrink-0">{openPollsCount} Open</Badge>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-border p-6 text-center space-y-2">
-                      <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                        <CheckCircle2 className="h-6 w-6 text-green-500" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">
-                          No open polls right now
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Check back later for new votes.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-              <ScheduleCard
-                building={building}
-                announcements={announcements}
-                pending={openRequests}
-                completed={[]}
-                bookings={upcomingBookings}
-              />
+              {sidebar.map((m) => (
+                <div key={m.key}>{m.render()}</div>
+              ))}
             </div>
           </div>
+
+          {modules.length === 0 ? (
+            <Card className="rounded-xl">
+              <CardHeader>
+                <CardTitle>No modules enabled</CardTitle>
+                <CardDescription>
+                  No dashboard modules are enabled for this building right now.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ) : null}
         </div>
       </div>
     </ProtectedRoute>

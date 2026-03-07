@@ -4,10 +4,13 @@ import MaintenanceCard from './_components/MaintenanceCard';
 import RewardsCard from './_components/RewardsCard';
 import ScheduleCard from '@/components/dashboard/ScheduleCard';
 import PollsCard from '@/components/dashboard/PollsCard';
+import UpcomingEventsCard from '@/components/dashboard/UpcomingEventsCard';
 
 export function getDashboardModules({
   building,
   announcements,
+  events,
+  polls,
   pending,
   completed,
   resources,
@@ -22,6 +25,7 @@ export function getDashboardModules({
       render: () => <AmenitiesCard building={building} resources={resources} />,
       priority: 10,
     },
+
     {
       key: 'maintenance',
       title: 'Maintenance',
@@ -43,8 +47,6 @@ export function getDashboardModules({
       priority: 30,
       always: true,
     },
-
-    // ✅ NEW: Polls card (feature-gated by building_features key "polls")
     {
       key: 'polls',
       title: 'Polls',
@@ -58,15 +60,31 @@ export function getDashboardModules({
       ),
       priority: 35,
     },
-
+    {
+      key: 'upcoming-events',
+      title: 'Upcoming Events',
+      area: 'full',
+      render: () => (
+        <UpcomingEventsCard
+          basePath={`/manager/buildings/${building.id}`}
+          announcements={announcements}
+          events={events}
+          polls={polls}
+          role="manager"
+        />
+      ),
+      priority: 5,
+      always: true,
+    },
     {
       key: 'schedule',
       title: 'Schedule',
       area: 'sidebar',
       render: () => (
         <ScheduleCard
-          building={building}
+          basePath={`/manager/buildings/${building.id}`}
           announcements={announcements}
+          events={events}
           pending={pending}
           completed={completed}
           bookings={bookings}
