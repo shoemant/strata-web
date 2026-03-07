@@ -8,6 +8,7 @@ import {
 } from '@supabase/auth-helpers-react';
 
 import ProtectedRoute from '@/components/ProtectedRoute';
+import NotificationSettingsCard from '@/components/notifications/NotificationSettingsCard';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, MapPin, Plus } from 'lucide-react';
+import { CalendarDays, MapPin, Plus, Mail, Send, Loader2 } from 'lucide-react';
 
 export default function ManagerEventsPage() {
   const supabase = useSupabaseClient();
@@ -37,12 +38,22 @@ export default function ManagerEventsPage() {
   const [open, setOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  const [testEmailOpen, setTestEmailOpen] = useState(false);
+  const [testEmailValue, setTestEmailValue] = useState('');
+  const [selectedEventForTest, setSelectedEventForTest] = useState(null);
+  const [testSendingId, setTestSendingId] = useState(null);
+
   const [form, setForm] = useState({
     title: '',
     description: '',
     location: '',
     start_at: '',
     end_at: '',
+    notify_residents: false,
+    target_audience: 'all',
+    email_subject: '',
+    send_reminder: false,
+    reminder_hours_before: 24,
   });
 
   const userId = session?.user?.id;
@@ -107,6 +118,11 @@ export default function ManagerEventsPage() {
       location: '',
       start_at: '',
       end_at: '',
+      notify_residents: false,
+      target_audience: 'all',
+      email_subject: '',
+      send_reminder: false,
+      reminder_hours_before: 24,
     });
   };
 
@@ -135,11 +151,40 @@ export default function ManagerEventsPage() {
         location: form.location.trim() || null,
         start_at: form.start_at,
         end_at: form.end_at || null,
+        target_audience: form.target_audience || 'all',
+        notify_residents: form.notify_residents,
+        email_subject: form.email_subject?.trim() || null,
+        send_reminder: form.send_reminder,
+        reminder_hours_before: form.send_reminder
+          ? Number(form.reminder_hours_before || 24)
+          : null,
       };
 
-      const { error } = await supabase.from('events').insert(payload);
+      const { data, error } = await supabase
+        .from('events')
+        .insert(payload)
+        .select('*')
+        .maybeSingle();
 
       if (error) throw error;
+
+      if (data && form.notify_residents) {
+        try {
+          await fetch(
+            `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/events/notify`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                eventId: data.id,
+                buildingId,
+              }),
+            }
+          );
+        } catch (notifyErr) {
+          console.error('Event notify request failed:', notifyErr);
+        }
+      }
 
       resetForm();
       setOpen(false);
@@ -172,6 +217,43 @@ export default function ManagerEventsPage() {
       setErrorMsg(err.message || 'Failed to delete event.');
     }
   };
+
+  async function handleSendEventTestEmail() {
+    if (!selectedEventForTest?.id || !testEmailValue.trim()) return;
+
+    try {
+      setTestSendingId(selectedEventForTest.id);
+      setErrorMsg('');
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/events/test-send`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventId: selectedEventForTest.id,
+            buildingId,
+            testEmail: testEmailValue.trim(),
+          }),
+        }
+      );
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result?.error || 'Failed to send test event email.');
+      }
+
+      setTestEmailOpen(false);
+      setTestEmailValue('');
+      setSelectedEventForTest(null);
+    } catch (err) {
+      console.error('Event test email failed:', err);
+      setErrorMsg(err.message || 'Failed to send test event email.');
+    } finally {
+      setTestSendingId(null);
+    }
+  }
 
   const formatDateTime = (date) =>
     new Date(date).toLocaleString([], {
@@ -210,6 +292,73 @@ export default function ManagerEventsPage() {
     <ProtectedRoute allowedRoles={['manager']}>
       <main className="absolute top-16 bottom-0 left-0 md:left-16 right-0 overflow-auto">
         <div className="w-full px-6 pt-0 pb-6 space-y-6">
+          <Dialog
+            open={testEmailOpen}
+            onOpenChange={(open) => {
+              setTestEmailOpen(open);
+              if (!open) {
+                setTestEmailValue('');
+                setSelectedEventForTest(null);
+              }
+            }}
+          >
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Send Test Event Email</DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">
+                    {selectedEventForTest?.title || 'Event'}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    This sends the real event email template to one address
+                    only.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="event_test_email">Test email address</Label>
+                  <Input
+                    id="event_test_email"
+                    type="email"
+                    placeholder="name@example.com"
+                    value={testEmailValue}
+                    onChange={(e) => setTestEmailValue(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setTestEmailOpen(false);
+                      setTestEmailValue('');
+                      setSelectedEventForTest(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+
+                  <Button
+                    type="button"
+                    onClick={handleSendEventTestEmail}
+                    disabled={!testEmailValue.trim() || !!testSendingId}
+                  >
+                    {testSendingId ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="mr-2 h-4 w-4" />
+                    )}
+                    Send Test Email
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-muted-foreground mt-1">
@@ -217,6 +366,7 @@ export default function ManagerEventsPage() {
                 {building?.name ? ` for ${building.name}` : ''}.
               </p>
             </div>
+
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button className="gap-2">
@@ -225,7 +375,7 @@ export default function ManagerEventsPage() {
                 </Button>
               </DialogTrigger>
 
-              <DialogContent className="sm:max-w-lg">
+              <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-auto">
                 <DialogHeader>
                   <DialogTitle>Create Event</DialogTitle>
                 </DialogHeader>
@@ -306,6 +456,28 @@ export default function ManagerEventsPage() {
                     </div>
                   </div>
 
+                  <NotificationSettingsCard
+                    entityLabel="event"
+                    allowReminder
+                    value={{
+                      send_email: form.notify_residents,
+                      audience: form.target_audience,
+                      custom_subject: form.email_subject,
+                      send_reminder: form.send_reminder,
+                      reminder_hours_before: form.reminder_hours_before,
+                    }}
+                    onChange={(next) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        notify_residents: next.send_email,
+                        target_audience: next.audience,
+                        email_subject: next.custom_subject,
+                        send_reminder: next.send_reminder,
+                        reminder_hours_before: next.reminder_hours_before,
+                      }))
+                    }
+                  />
+
                   {errorMsg ? (
                     <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                       {errorMsg}
@@ -331,11 +503,13 @@ export default function ManagerEventsPage() {
               </DialogContent>
             </Dialog>
           </div>
+
           {errorMsg && !open ? (
             <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {errorMsg}
             </div>
           ) : null}
+
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <Card className="xl:col-span-2">
               <CardHeader>
@@ -354,12 +528,15 @@ export default function ManagerEventsPage() {
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0 space-y-2">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <CalendarDays className="h-4 w-4 text-primary" />
                             <h3 className="font-medium text-foreground">
                               {event.title}
                             </h3>
                             <Badge variant="outline">Upcoming</Badge>
+                            {event.notify_residents ? (
+                              <Badge variant="secondary">Email enabled</Badge>
+                            ) : null}
                           </div>
 
                           <p className="text-sm text-muted-foreground">
@@ -384,6 +561,20 @@ export default function ManagerEventsPage() {
                         </div>
 
                         <div className="flex shrink-0 gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => {
+                              setSelectedEventForTest(event);
+                              setTestEmailValue('');
+                              setTestEmailOpen(true);
+                            }}
+                          >
+                            <Mail className="h-4 w-4" />
+                            Test Email
+                          </Button>
+
                           <Button
                             variant="outline"
                             size="sm"
@@ -414,15 +605,38 @@ export default function ManagerEventsPage() {
                       key={event.id}
                       className="rounded-lg border border-border/40 p-3"
                     >
-                      <div className="font-medium text-sm">{event.title}</div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="font-medium text-sm">{event.title}</div>
+                        {event.notify_residents ? (
+                          <Badge variant="secondary">Email enabled</Badge>
+                        ) : null}
+                      </div>
+
                       <div className="mt-1 text-xs text-muted-foreground">
                         {formatDateTime(event.start_at)}
                       </div>
+
                       {event.location ? (
                         <div className="mt-1 text-xs text-muted-foreground">
                           {event.location}
                         </div>
                       ) : null}
+
+                      <div className="mt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => {
+                            setSelectedEventForTest(event);
+                            setTestEmailValue('');
+                            setTestEmailOpen(true);
+                          }}
+                        >
+                          <Mail className="h-4 w-4" />
+                          Test Email
+                        </Button>
+                      </div>
                     </div>
                   ))
                 )}

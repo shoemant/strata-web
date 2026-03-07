@@ -5,6 +5,14 @@ import { useParams } from 'next/navigation';
 import { useSupabaseClient } from '@supabase/auth-helpers-react';
 
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+
+import {
   Card,
   CardHeader,
   CardTitle,
@@ -25,6 +33,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import NotificationSettingsCard from '@/components/notifications/NotificationSettingsCard';
 import {
   Loader2,
   Trash2,
@@ -32,6 +41,8 @@ import {
   X,
   Pencil,
   CalendarClock,
+  Mail,
+  Send,
 } from 'lucide-react';
 
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -65,12 +76,16 @@ export default function AnnouncementsPage() {
   const bannerTimerRef = useRef(null);
 
   const [announcements, setAnnouncements] = useState([]);
-
   const [presets, setPresets] = useState([]);
   const [selectedPresetId, setSelectedPresetId] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-
   const [editingId, setEditingId] = useState(null);
+
+  const [testEmailOpen, setTestEmailOpen] = useState(false);
+  const [testEmailValue, setTestEmailValue] = useState('');
+  const [testSendingId, setTestSendingId] = useState(null);
+  const [selectedAnnouncementForTest, setSelectedAnnouncementForTest] =
+    useState(null);
 
   const [form, setForm] = useState({
     title: '',
@@ -80,7 +95,7 @@ export default function AnnouncementsPage() {
     expiry_mode: 'none',
     expiry_days: '14',
     expires_at: '',
-    publish_mode: 'now', // now | later
+    publish_mode: 'now',
     publish_at: '',
     use_image: true,
     image_file: null,
@@ -89,6 +104,9 @@ export default function AnnouncementsPage() {
     banner_bg_color: '#1d4ed8',
     overlay_color: '#000000',
     overlay_opacity: 45,
+    notify_residents: false,
+    notify_timing: 'now',
+    email_subject: '',
   });
 
   const [loading, setLoading] = useState(true);
@@ -126,6 +144,20 @@ export default function AnnouncementsPage() {
     if (buildingId) fetchAnnouncements();
   }, [buildingId]);
 
+  useEffect(() => {
+    if (!banner) return;
+
+    if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+
+    bannerTimerRef.current = setTimeout(() => {
+      setBanner(null);
+    }, 3500);
+
+    return () => {
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    };
+  }, [banner]);
+
   const nowIso = useMemo(() => new Date().toISOString(), []);
 
   function resetForm() {
@@ -152,6 +184,9 @@ export default function AnnouncementsPage() {
       banner_bg_color: '#1d4ed8',
       overlay_color: '#000000',
       overlay_opacity: 45,
+      notify_residents: false,
+      notify_timing: 'now',
+      email_subject: '',
     });
   }
 
@@ -251,6 +286,50 @@ export default function AnnouncementsPage() {
     return pub?.publicUrl || null;
   }
 
+  async function handleSendTestEmail() {
+    if (!selectedAnnouncementForTest?.id || !testEmailValue.trim()) return;
+
+    try {
+      setTestSendingId(selectedAnnouncementForTest.id);
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/announcements/test-send`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            announcementId: selectedAnnouncementForTest.id,
+            buildingId,
+            testEmail: testEmailValue.trim(),
+          }),
+        }
+      );
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result?.error || 'Failed to send test email.');
+      }
+
+      setBanner({
+        type: 'success',
+        msg: `Test email sent to ${testEmailValue.trim()}.`,
+      });
+
+      setTestEmailOpen(false);
+      setTestEmailValue('');
+      setSelectedAnnouncementForTest(null);
+    } catch (err) {
+      console.error('Announcement test email failed:', err);
+      setBanner({
+        type: 'error',
+        msg: err.message || 'Failed to send test email.',
+      });
+    } finally {
+      setTestSendingId(null);
+    }
+  }
+
   function beginEdit(a) {
     if (!a) return;
 
@@ -291,6 +370,9 @@ export default function AnnouncementsPage() {
       overlay_color: a.overlay_color || '#000000',
       overlay_opacity:
         typeof a.overlay_opacity === 'number' ? a.overlay_opacity : 45,
+      notify_residents: Boolean(a.notify_residents),
+      notify_timing: a.notify_timing || 'now',
+      email_subject: a.email_subject || '',
     });
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -361,6 +443,9 @@ export default function AnnouncementsPage() {
       banner_bg_color: form.banner_bg_color || null,
       overlay_color: form.overlay_color || null,
       overlay_opacity: form.overlay_opacity,
+      notify_residents: form.notify_residents,
+      notify_timing: form.notify_timing || 'now',
+      email_subject: form.email_subject?.trim() || null,
     };
 
     if (!editingId) {
@@ -386,7 +471,6 @@ export default function AnnouncementsPage() {
         .maybeSingle();
     }
 
-    console.log('save result:', result);
     const { data, error } = result;
 
     if (error) {
@@ -395,17 +479,68 @@ export default function AnnouncementsPage() {
         type: 'error',
         msg: error.message || 'Failed to save announcement.',
       });
-    } else if (!data) {
-      console.warn(
-        'No row was inserted/updated. Likely RLS or filter mismatch.'
-      );
+      setPosting(false);
+      return;
+    }
+
+    if (!data) {
       setBanner({
         type: 'error',
         msg: 'No rows were updated. This is usually an RLS policy or row-match issue.',
       });
+      setPosting(false);
+      return;
+    }
+
+    const shouldSendImmediately =
+      form.notify_residents &&
+      ((!editingId && form.publish_mode === 'now') ||
+        (form.publish_mode === 'later' && form.notify_timing === 'now'));
+
+    if (shouldSendImmediately) {
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/announcements/notify`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              announcementId: data.id,
+              buildingId,
+            }),
+          }
+        );
+
+        const notifyResult = await res.json();
+
+        if (!res.ok) {
+          console.error('Notify error:', notifyResult);
+          setBanner({
+            type: 'success',
+            msg: editingId
+              ? 'Announcement saved, but resident emails failed to send.'
+              : 'Announcement posted, but resident emails failed to send.',
+          });
+        } else {
+          setBanner({
+            type: 'success',
+            msg: editingId
+              ? 'Announcement updated and residents notified successfully!'
+              : 'Announcement posted and residents notified successfully!',
+          });
+        }
+      } catch (notifyErr) {
+        console.error('Notify request failed:', notifyErr);
+        setBanner({
+          type: 'success',
+          msg: editingId
+            ? 'Announcement saved, but resident emails failed to send.'
+            : 'Announcement posted, but resident emails failed to send.',
+        });
+      }
     } else {
-      resetForm();
-      await fetchAnnouncements();
       setBanner({
         type: 'success',
         msg: editingId
@@ -413,6 +548,10 @@ export default function AnnouncementsPage() {
           : 'Announcement saved successfully!',
       });
     }
+
+    resetForm();
+    await fetchAnnouncements();
+    setPosting(false);
   }
 
   async function handleDelete(id) {
@@ -480,6 +619,75 @@ export default function AnnouncementsPage() {
           </div>
         </div>
       )}
+
+      <Dialog
+        open={testEmailOpen}
+        onOpenChange={(open) => {
+          setTestEmailOpen(open);
+          if (!open) {
+            setTestEmailValue('');
+            setSelectedAnnouncementForTest(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Test Announcement Email</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <div className="text-sm font-medium">
+                {selectedAnnouncementForTest?.title || 'Announcement'}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                This sends the real announcement email template to one address
+                only.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="announcement_test_email">
+                Test email address
+              </Label>
+              <Input
+                id="announcement_test_email"
+                type="email"
+                placeholder="name@example.com"
+                value={testEmailValue}
+                onChange={(e) => setTestEmailValue(e.target.value)}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setTestEmailOpen(false);
+                  setTestEmailValue('');
+                  setSelectedAnnouncementForTest(null);
+                }}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handleSendTestEmail}
+                disabled={!testEmailValue.trim() || !!testSendingId}
+              >
+                {testSendingId ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4" />
+                )}
+                Send Test Email
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader className="pb-3">
@@ -625,6 +833,26 @@ export default function AnnouncementsPage() {
 
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-6">
+            <NotificationSettingsCard
+              entityLabel="announcement"
+              allowTiming
+              value={{
+                send_email: form.notify_residents,
+                audience: form.target_audience,
+                send_timing: form.notify_timing,
+                custom_subject: form.email_subject,
+              }}
+              onChange={(next) =>
+                setForm((f) => ({
+                  ...f,
+                  notify_residents: next.send_email,
+                  target_audience: next.audience,
+                  notify_timing: next.send_timing,
+                  email_subject: next.custom_subject,
+                }))
+              }
+            />
+
             <div className="grid gap-2">
               <Label htmlFor="title">Title</Label>
               <Input
@@ -963,6 +1191,10 @@ export default function AnnouncementsPage() {
                         {a.target_audience || 'all'}
                       </Badge>
 
+                      {a.notify_residents ? (
+                        <Badge variant="outline">Email enabled</Badge>
+                      ) : null}
+
                       {isScheduled ? (
                         <Badge variant="outline" className="gap-1">
                           <CalendarClock className="h-3 w-3" />
@@ -971,6 +1203,20 @@ export default function AnnouncementsPage() {
                       ) : (
                         <Badge variant="outline">Live</Badge>
                       )}
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() => {
+                          setSelectedAnnouncementForTest(a);
+                          setTestEmailValue('');
+                          setTestEmailOpen(true);
+                        }}
+                      >
+                        <Mail className="h-4 w-4" />
+                        Test Email
+                      </Button>
 
                       <Button
                         size="icon"
