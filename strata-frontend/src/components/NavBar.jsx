@@ -17,6 +17,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
+import { useTheme } from 'next-themes';
+
 import {
   LayoutDashboard,
   User,
@@ -283,6 +285,19 @@ export default function NavBar() {
   const [hoverOpen, setHoverOpen] = useState(false);
   const [isTouch, setIsTouch] = useState(false);
 
+  const expanded = pinnedOpen || (!isTouch && hoverOpen);
+
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme !== 'dark';
+
+  const logoSrc = expanded
+    ? isLight
+      ? '/images/logo-dark.png'
+      : '/images/logo.png'
+    : isLight
+      ? '/images/logo-dark-small.png'
+      : '/images/logo-compact-v2.png';
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const mq = window.matchMedia('(pointer: coarse)');
@@ -298,8 +313,6 @@ export default function NavBar() {
       else mq.removeListener(update);
     };
   }, []);
-
-  const expanded = pinnedOpen || (!isTouch && hoverOpen);
 
   const user = ctx?.user ?? null;
   const roleRaw = ctx?.role ?? null;
@@ -494,26 +507,14 @@ export default function NavBar() {
                 >
                   <div className={`relative h-8 ${expanded ? 'w-40' : 'w-10'}`}>
                     <Image
-                      src="/images/logo-compact-v2.png"
-                      alt="My Building Logo (compact)"
-                      fill
-                      priority
-                      className={[
-                        'object-contain transition-opacity duration-200 ease-in-out',
-                        expanded ? 'opacity-0' : 'opacity-100',
-                      ].join(' ')}
-                      aria-hidden={expanded ? 'true' : 'false'}
-                    />
-                    <Image
-                      src="/images/logo.png"
+                      key={logoSrc}
+                      src={logoSrc}
                       alt="My Building Logo"
-                      fill
+                      width={expanded ? 160 : 40}
+                      height={32}
                       priority
-                      className={[
-                        'object-contain transition-opacity duration-200 ease-in-out',
-                        expanded ? 'opacity-100' : 'opacity-0',
-                      ].join(' ')}
-                      aria-hidden={expanded ? 'false' : 'true'}
+                      unoptimized
+                      className="h-8 w-auto object-contain transition-all duration-200 ease-in-out"
                     />
                   </div>
                 </Link>
@@ -749,6 +750,11 @@ function MobileHeaderMenuSlot({ children }) {
   const { setLeftSlot } = useHeaderActions(); // your context must expose this
   const [open, setOpen] = useState(false);
 
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme !== 'dark';
+
+  const mobileLogoSrc = isLight ? '/images/logo-dark.png' : '/images/logo.png';
+
   const slot = useMemo(() => {
     return (
       <div className="md:hidden">
@@ -781,16 +787,17 @@ function MobileHeaderMenuSlot({ children }) {
                 Use this menu to navigate between pages.
               </SheetDescription>
 
-              <div className="flex items-center gap-3">
-                <div className="relative h-8 w-36">
-                  <Image
-                    src="/images/logo.png"
-                    alt="My Building Logo"
-                    fill
-                    priority
-                    className="object-contain"
-                  />
-                </div>
+              <div className="relative h-8 w-36">
+                <Image
+                  key={mobileLogoSrc}
+                  src={mobileLogoSrc}
+                  alt="My Building Logo"
+                  width={144}
+                  height={32}
+                  priority
+                  unoptimized
+                  className="h-8 w-auto object-contain"
+                />
               </div>
             </SheetHeader>
 
