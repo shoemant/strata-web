@@ -85,7 +85,7 @@ function AnnouncementsDeck({ items, href }) {
     <div
       ref={containerRef}
       className="
-        relative group w-full overflow-visible md:overflow-hidden rounded-2xl border border-border/20 bg-black
+        relative group w-full overflow-visible md:overflow-hidden rounded-2xl border border-border/20 bg-transparent
         transition-[height] duration-700 ease-[cubic-bezier(0.45,0,0.55,1)]
         shadow-[0_8px_32px_-8px_rgba(0,0,0,0.45)]
       "
@@ -149,7 +149,7 @@ function BuildingSlide({ active }) {
   block w-full
   h-auto
   object-contain
-  bg-black
+  bg-transparent
 "
             loading="eager"
             decoding="async"
@@ -179,55 +179,38 @@ function AnnouncementSlide({ active, href }) {
     : null;
 
   return (
-    <div className="block relative bg-black">
-      {/* ── MOBILE: overlay ── */}
-      <div className="relative md:hidden">
-        {hasImg ? (
-          <img
-            src={active.image_url}
-            alt={active.title || 'Announcement'}
-            className="block w-full h-auto object-contain select-none"
-            loading="lazy"
-            decoding="async"
-            draggable={false}
-            onDragStart={(e) => e.preventDefault()}
-          />
-        ) : (
-          <div
-            className="w-full"
-            style={{
-              aspectRatio: '4/3',
-              background:
-                active?.banner_bg_color ||
-                'linear-gradient(to bottom right, #4f46e5, #6366f1)',
-            }}
-          />
-        )}
+    <div className="block relative bg-transparent">
+      {/* ── MOBILE: improved announcement card ── */}
+      <div className="relative md:hidden rounded-2xl overflow-hidden">
+        {/* Background image */}
+        <img
+          src="https://igykogntboasdbmpzeca.supabase.co/storage/v1/object/public/announcement-presets/blank/blank_photo_square.jpg"
+          alt={active.title || 'Announcement'}
+          className="block w-full aspect-square object-cover"
+        />
 
-        {/* Gradient overlay — tall enough to always show full text */}
-        <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-4 pb-6 pt-16 pointer-events-none flex flex-col justify-end">
-          <p
-            className="text-white font-bold text-lg leading-snug break-words"
-            style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
-          >
-            {active.title}
-          </p>
-          {active.message && (
-            <p
-              className="text-white/90 text-sm leading-relaxed break-words whitespace-pre-wrap mt-1.5"
-              style={{ textShadow: '0 1px 1px rgba(0,0,0,0.6)' }}
-            >
-              {active.message}
-            </p>
-          )}
+        {/* DARKER overlay */}
+        <div className="absolute inset-0 bg-black/30" />
+
+        {/* Bottom gradient (stronger for readability) */}
+        <div className="absolute inset-x-0 bottom-0 h-[60%] bg-gradient-to-t from-black via-black/50 to-transparent" />
+
+        {/* Text */}
+        <div className="absolute inset-x-0 bottom-0 z-20 px-5 pb-6 pt-20 flex flex-col items-start">
           {hasDate && (
-            <span
-              className="inline-flex self-start items-center px-3 py-1 mt-2
-          rounded-md bg-primary text-primary-foreground font-medium shadow-lg text-xs"
-              style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.35)' }}
-            >
+            <span className="mb-2 text-sm font-medium text-white/80">
               {formattedDate}
             </span>
+          )}
+
+          <h2 className="text-white font-bold text-xl leading-snug text-left">
+            {active.title}
+          </h2>
+
+          {active.message && (
+            <p className="mt-2 text-white/90 text-base leading-relaxed text-left">
+              {active.message}
+            </p>
           )}
         </div>
       </div>
