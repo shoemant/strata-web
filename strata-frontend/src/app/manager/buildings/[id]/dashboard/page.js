@@ -107,7 +107,7 @@ export default function ManagerDashboard() {
         const { data: mb, error: mbErr } = await supabase
           .from('manager_buildings')
           .select(
-            'buildings!manager_buildings_building_id_fkey(name,id,hero_image_url)'
+            'buildings!manager_buildings_building_id_fkey(name,id,hero_image_url,hero_mobile_image_url,hero_desktop_image_url)'
           )
           .eq('user_id', userId)
           .single();
@@ -119,17 +119,14 @@ export default function ManagerDashboard() {
 
         const b = mb.buildings;
 
-        const { data: heroDoc, error: heroErr } = await supabase
+        const { data: heroDocs, error: heroErr } = await supabase
           .from('documents')
-          .select('url')
+          .select('url, path')
           .eq('building_id', b.id)
           .eq('is_folder', false)
           .or(
             `folder.eq.building_image,path.ilike.documents/${b.id}/building_image/%`
-          )
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          );
 
         if (heroErr) console.error('Hero image lookup error:', heroErr);
 
@@ -142,6 +139,39 @@ export default function ManagerDashboard() {
         if (featErr) console.error('Features lookup error:', featErr);
 
         const enabledNow = resolveEnabledFeatures(featRow ?? null, 'manager');
+
+        const getImageText = (doc) =>
+          `${doc.path ?? ''} ${doc.url ?? ''}`.toLowerCase();
+
+        const desktopHero = heroDocs?.find((doc) =>
+          getImageText(doc).includes('desktop')
+        )?.url;
+
+        const mobileHero = heroDocs?.find((doc) =>
+          getImageText(doc).includes('mobile')
+        )?.url;
+
+        const fallbackHero =
+          b.hero_desktop_image_url ||
+          desktopHero ||
+          heroDocs?.[0]?.url ||
+          b.hero_image_url ||
+          null;
+
+        console.log('heroDocs:', heroDocs);
+        console.log({ desktopHero, mobileHero, fallbackHero });
+
+        setBuilding({
+          ...b,
+          hero_image_url: fallbackHero,
+
+          // ✅ prioritize DB values FIRST
+          hero_desktop_image_url:
+            b.hero_desktop_image_url || desktopHero || fallbackHero,
+
+          hero_mobile_image_url:
+            b.hero_mobile_image_url || mobileHero || fallbackHero,
+        });
 
         // ✅ include open poll count here
         const [
@@ -171,11 +201,6 @@ export default function ManagerDashboard() {
         ]);
 
         if (canceled) return;
-
-        setBuilding({
-          ...b,
-          hero_image_url: heroDoc?.url ?? b.hero_image_url ?? null,
-        });
 
         setFeaturesRow(featRow ?? null);
         setEnabled(enabledNow);
@@ -232,45 +257,65 @@ export default function ManagerDashboard() {
 
   return (
     <ProtectedRoute allowedRoles={['manager']}>
-      <div className="absolute top-16 bottom-0 left-0 md:left-16 right-0 bg-background px-6">
-        <div className="space-y-6">
-          <HeroWithAnnouncements
-            imageUrl={building?.hero_image_url}
-            announcements={showAnnouncementsInHero ? announcements : []}
-            announcementsHref={`/manager/buildings/${building.id}/announcements`}
-          />
-
-          {full.length ? (
-            <div className="space-y-6">
-              {full.map((m) => (
-                <div key={m.key}>{m.render()}</div>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className={`${mainColSpan} space-y-6`}>
-              <div className={mainGridClass}>
-                {main.map((m) => (
-                  <div key={m.key}>{m.render()}</div>
-                ))}
-              </div>
-            </div>
-
-            {sidebar.length ? (
-              <div className="lg:col-span-1 space-y-6">
-                {sidebar.map((m) => (
-                  <div key={m.key}>{m.render()}</div>
-                ))}
-              </div>
-            ) : null}
+      <div className="absolute top-16 bottom-0 left-0 md:left-16 right-0 overflow-y-auto bg-background">
+        <div className="relative px-4 md:px-6 pb-10">
+          {/* Sticky hero */}
+          <div className="sticky top-4 md:top-6 z-10">
+            <HeroWithAnnouncements
+              imageUrl={building?.hero_image_url}
+              mobileImageUrl={building?.hero_mobile_image_url}
+              desktopImageUrl={building?.hero_desktop_image_url}
+              announcements={showAnnouncementsInHero ? announcements : []}
+              announcementsHref={`/manager/buildings/${building.id}/announcements`}
+            />
           </div>
 
-          {modules.length === 0 ? (
-            <div className="rounded-lg border p-6 text-sm text-muted-foreground">
-              No modules are enabled for this building yet.
+          {/* Content that slides over/pushes the hero */}
+          <div
+            className="
+    relative z-20
+    mt-6 md:mt-8
+    rounded-2xl
+    bg-background
+    px-1 md:px-0
+    pt-0
+    shadow-[0_-12px_40px_-30px_rgba(0,0,0,0.45)]
+  "
+          >
+            <div className="space-y-6">
+              {full.length ? (
+                <div className="space-y-6">
+                  {full.map((m) => (
+                    <div key={m.key}>{m.render()}</div>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className={`${mainColSpan} space-y-6`}>
+                  <div className={mainGridClass}>
+                    {main.map((m) => (
+                      <div key={m.key}>{m.render()}</div>
+                    ))}
+                  </div>
+                </div>
+
+                {sidebar.length ? (
+                  <div className="lg:col-span-1 space-y-6">
+                    {sidebar.map((m) => (
+                      <div key={m.key}>{m.render()}</div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              {modules.length === 0 ? (
+                <div className="rounded-lg border p-6 text-sm text-muted-foreground">
+                  No modules are enabled for this building yet.
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          </div>
         </div>
       </div>
     </ProtectedRoute>

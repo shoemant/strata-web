@@ -479,9 +479,11 @@ export default function OwnerDashboard() {
         <div className="w-full mx-auto space-y-4">
           <div className="absolute inset-0 bg-[url('/abstract-geometric-pattern.png')] opacity-[0.02] bg-cover bg-center" />
 
-          <div className="relative md:p-8">
+          <div className="relative px-3 md:px-8">
             <HeroWithAnnouncements
               imageUrl={building?.hero_image_url}
+              mobileImageUrl={building?.hero_mobile_image_url}
+              desktopImageUrl={building?.hero_desktop_image_url}
               announcements={announcements}
               announcementsHref={
                 buildingId

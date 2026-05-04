@@ -12,8 +12,9 @@ import { useSwipeable } from 'react-swipeable';
  * - Max height capped per breakpoint to avoid overflow (no bars/jumps)
  */
 export default function HeroWithAnnouncements({
-  // name,
   imageUrl,
+  mobileImageUrl,
+  desktopImageUrl,
   announcements = [],
   announcementsHref,
 }) {
@@ -27,6 +28,8 @@ export default function HeroWithAnnouncements({
     {
       id: 'building-hero',
       image_url: imageUrl || null,
+      mobile_image_url: mobileImageUrl || imageUrl || null,
+      desktop_image_url: desktopImageUrl || imageUrl || null,
       isBuilding: true,
     },
     ...validAnnouncements,
@@ -34,7 +37,7 @@ export default function HeroWithAnnouncements({
 
   return (
     // Removed pb-6 on mobile (kept md:pb-0 as-is since desktop unchanged)
-    <section className="relative z-10 md:pb-0">
+    <section className="sticky top-4 z-10 md:top-6 md:pb-0">
       <AnnouncementsDeck items={deckItems} href={announcementsHref} />
     </section>
   );
@@ -82,8 +85,9 @@ function AnnouncementsDeck({ items, href }) {
     <div
       ref={containerRef}
       className="
-        relative group w-full overflow-hidden md:rounded-2xl border border-border/20 bg-black
+        relative group w-full overflow-visible md:overflow-hidden rounded-2xl border border-border/20 bg-black
         transition-[height] duration-700 ease-[cubic-bezier(0.45,0,0.55,1)]
+        shadow-[0_8px_32px_-8px_rgba(0,0,0,0.45)]
       "
     >
       <div
@@ -128,26 +132,36 @@ function AnnouncementsDeck({ items, href }) {
 }
 
 function BuildingSlide({ active }) {
+  const mobileSrc = active.mobile_image_url || active.image_url;
+  const desktopSrc = active.desktop_image_url || active.image_url;
+
   return (
-    <div className="relative">
-      {active.image_url ? (
-        <>
+    <div className="relative md:rounded-none rounded-2xl overflow-hidden">
+      {' '}
+      {mobileSrc || desktopSrc ? (
+        <picture>
+          <source media="(min-width: 768px)" srcSet={desktopSrc} />
+
           <img
-            src={active.image_url}
+            src={mobileSrc}
             alt="Building"
-            className="block w-full h-auto object-contain select-none md:max-h-[72vh] lg:max-h-[75vh]"
+            className="
+  block w-full
+  h-auto
+  object-contain
+  bg-black
+"
             loading="eager"
             decoding="async"
             draggable={false}
             onDragStart={(e) => e.preventDefault()}
           />
-        </>
+        </picture>
       ) : (
         <div className="block w-full h-[44vh] sm:h-[48vh] md:h-[52vh] lg:h-[56vh] bg-gradient-to-br from-primary/40 via-primary/20 to-primary/10" />
       )}
-
-      {/* Title overlay placeholder — currently empty */}
-      <div className="absolute inset-0 flex items-center justify-center text-center px-4"></div>
+      {/* Mobile-only: soft bottom fade so the image dissolves into the page */}
+      <div className="absolute inset-x-0 bottom-0 h-16 md:hidden bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
     </div>
   );
 }
@@ -172,8 +186,7 @@ function AnnouncementSlide({ active, href }) {
           <img
             src={active.image_url}
             alt={active.title || 'Announcement'}
-            className="block w-full object-cover select-none"
-            style={{ aspectRatio: '4/3' }}
+            className="block w-full h-auto object-contain select-none"
             loading="lazy"
             decoding="async"
             draggable={false}
@@ -192,7 +205,7 @@ function AnnouncementSlide({ active, href }) {
         )}
 
         {/* Gradient overlay — tall enough to always show full text */}
-        <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-4 pb-10 pt-24 pointer-events-none flex flex-col justify-end">
+        <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-4 pb-6 pt-16 pointer-events-none flex flex-col justify-end">
           <p
             className="text-white font-bold text-lg leading-snug break-words"
             style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
@@ -225,7 +238,7 @@ function AnnouncementSlide({ active, href }) {
           <img
             src={active.image_url}
             alt={active.title || 'Announcement'}
-            className="block w-full h-auto object-contain select-none max-h-[80vh] lg:max-h-[82vh]"
+            className="block w-full h-auto object-contain select-none"
             loading="lazy"
             decoding="async"
             draggable={false}
