@@ -32,6 +32,7 @@ export async function middleware(request) {
   } = await supabase.auth.getUser();
 
   const publicPaths = [
+    '/',
     '/login',
     '/login/password',
     '/unauthorized/',
@@ -40,6 +41,7 @@ export async function middleware(request) {
     '/accept-terms',
     '/terms',
     '/privacy',
+    '/request-info',
 
     // legacy / unused but kept
     '/signup',
@@ -58,9 +60,19 @@ export async function middleware(request) {
     '/images/apartment-dark-rescaled.svg',
     '/images/icons/rename.png',
     '/images/icons/visibility.png',
+    '/images/logo-dark.png',
+    '/images/landing/apartment-stock.avif',
   ];
 
   const { pathname } = request.nextUrl;
+
+  const isDevPreviewRoute =
+    process.env.NODE_ENV === 'development' && pathname.startsWith('/dev');
+
+  if (isDevPreviewRoute) {
+    return supabaseResponse;
+  }
+
   const isPublic = publicPaths.includes(pathname);
 
   if (!user && !isPublic) {
