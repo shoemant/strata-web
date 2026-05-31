@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/utils/supabase/server';
+import { LandingPage } from '@/components/landing/landing-page';
 
 async function resolveBuildingIdsForRole(supabase, userId, role, profile) {
   // 1) Fast path: profile has building_id (common for tenants / simple setups)
@@ -64,7 +65,7 @@ export default async function HomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect('/login');
+  if (!user) return <LandingPage />;
 
   const { data: profile } = await supabase
     .from('user_profiles')
