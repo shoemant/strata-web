@@ -1,27 +1,36 @@
 # MyStrataApp
 
-MyStrataApp is a web application designed to make communication and management within a strata community simpler and more organized.
+MyStrataApp is a full-stack web application designed to centralize communication, information, and common management workflows for strata communities.
 
-The platform provides residents and strata members with a centralized place to access important information related to their building and community. Instead of relying on scattered emails, notices, or separate systems, MyStrataApp brings common strata-related tasks and information together in one easy-to-use application.
+The application provides a shared platform for residents and strata administrators to manage building-related information, access documents, communicate updates, and handle common requests through a single web interface.
 
-MyStrataApp is designed with both residents and strata management in mind, providing a convenient way to stay informed, communicate, and manage day-to-day strata activities.
+## Core Functionality
 
-## Purpose
+MyStrataApp is designed to support features such as:
 
-The goal of MyStrataApp is to improve the experience of living in and managing a strata property by making important information easier to access and reducing the friction involved in communication between residents and strata management.
-
-## Key Features
-
-MyStrataApp can support features such as:
-
-- Strata announcements and notices
-- Resident and building information
-- Maintenance requests and issue reporting
-- Access to important strata documents
+- User authentication and role-based access
+- Resident and strata administrator accounts
+- Building announcements and notices
+- Maintenance request submission and tracking
+- Strata document management
+- Resident and unit information
+- Amenity and building information
 - Communication between residents and strata management
-- Amenity and building-related information
-- Centralized management of common strata activities
 
-## About
+## Architecture
 
-MyStrataApp is built as a modern web application focused on providing a simple, accessible, and organized experience for strata communities.
+The application follows a typical full-stack web architecture, with a client-facing frontend communicating with backend services responsible for application logic, authentication, and data persistence.
+
+The system is designed to separate presentation, business logic, and data storage concerns, making it easier to maintain and extend as new strata-management features are added.
+
+## Project Goals
+
+The main goals of MyStrataApp are to:
+
+- Provide a centralized source of information for strata residents
+- Reduce reliance on scattered emails and physical notices
+- Simplify communication between residents and strata management
+- Provide structured workflows for common strata-related tasks
+- Maintain a scalable and maintainable application architecture
+
+MyStrataApp is intended to serve as a practical full-stack application demonstrating web development, backend architecture, database integration, authentication, and user-focused software design.
